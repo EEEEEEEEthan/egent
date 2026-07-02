@@ -1,0 +1,140 @@
+"""从 Python 函数自动生成 OpenAI 工具 schema。"""
+
+from __future__ import annotations
+
+import inspect
+import json
+import re
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+import pydantic
+from openai.lib import pydantic_function_tool
+from openai.types.chat.chat_completion_tool_union_param import (
+    ChatCompletionToolUnionParam,
+)
+
+ToolCallable = Callable[..., Any]
+ToolHandler = Callable[[str], str | Awaitable[str]]
+
+_PARAM_PATTERN = re.compile(
+    r"^\s*@param\s+(\w+)\s*:?\s*(.+)$",
+    re.MULTILINE,
+)
+
+def tool_from_function(function: ToolCallable) -> ChatCompletionToolUnionParam:
+    """把带类型标注与文档注释的函数编成 Chat Completions 工具 schema。"""
+    arguments_model = _create_arguments_model(function)
+    summary, _ = _parse_docstring(inspect.getdoc(function))
+    return pydantic_function_tool(
+        arguments_model,
+        name=function.__name__,
+        description=summary,
+    )
+
+def tool_handler_from_function(function: ToolCallable) -> ToolHandler:
+    """为函数生成按 JSON 参数调用并返回字符串结果的处理器。"""
+    arguments_model = _create_arguments_model(function)
+
+    def handler(arguments_json: str) -> str | Awaitable[str]:
+        arguments = arguments_model.model_validate_json(arguments_json)
+        result = function(**arguments.model_dump())
+        if inspect.isawaitable(result):
+            return _format_awaitable_result(result)
+        if isinstance(result, str):
+            return result
+        return json.dumps(result, ensure_ascii=False)
+
+    return handler
+
+
+def resolve_tools(
+    tools: list[ToolCallable],
+) -> tuple[list[ChatCompletionToolUnionParam], dict[str, ToolHandler]]:
+    """把函数列表解析为 API tools 与 name -> handler 映射。
+
+    自动处理重名：首次出现保留原名，后续重名追加 _2、_3 等后缀。
+    """
+    api_tools: list[ChatCompletionToolUnionParam] = []
+    tool_handlers: dict[str, ToolHandler] = {}
+    seen_names: dict[str, int] = {}
+    for function in tools:
+        api_tool = tool_from_function(function)
+        function_name = api_tool["function"]["name"]
+
+        # 检测重名并自动追加后缀
+        if function_name in seen_names:
+            seen_names[function_name] += 1
+            unique_name = f"{function_name}_{seen_names[function_name]}"
+        else:
+            seen_names[function_name] = 1
+            unique_name = function_name
+
+        api_tool["function"]["name"] = unique_name
+        api_tools.append(api_tool)
+        tool_handlers[unique_name] = tool_handler_from_function(function)
+    return api_tools, tool_handlers
+
+
+def _create_arguments_model(function: ToolCallable) -> type[pydantic.BaseModel]:
+    signature = inspect.signature(function)
+    _, parameter_descriptions = _parse_docstring(inspect.getdoc(function))
+    field_definitions: dict[str, Any] = {}
+    for parameter_name, parameter in signature.parameters.items():
+        if parameter.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            raise TypeError(f"工具函数 {function.__name__} 不支持 *args/**kwargs。")
+
+        annotation = (
+            str
+            if parameter.annotation is inspect.Parameter.empty
+            else parameter.annotation
+        )
+        field_kwargs: dict[str, Any] = {}
+        if parameter_name in parameter_descriptions:
+            field_kwargs["description"] = parameter_descriptions[parameter_name]
+        if parameter.default is not inspect.Parameter.empty:
+            field_kwargs["default"] = parameter.default
+
+        if field_kwargs:
+            field_definitions[parameter_name] = (
+                annotation,
+                pydantic.Field(**field_kwargs),
+            )
+        else:
+            field_definitions[parameter_name] = (annotation, ...)
+
+    summary, _ = _parse_docstring(inspect.getdoc(function))
+    model = pydantic.create_model(
+        f"{function.__name__}Arguments",
+        **field_definitions,
+    )
+    model.__doc__ = summary
+    return model
+
+
+def _parse_docstring(
+    docstring: str | None,
+) -> tuple[str | None, dict[str, str]]:
+    if not docstring:
+        return None, {}
+
+    parameter_descriptions = {
+        match.group(1): match.group(2).strip()
+        for match in _PARAM_PATTERN.finditer(docstring)
+    }
+    summary_lines = [
+        line
+        for line in docstring.splitlines()
+        if not line.strip().startswith("@param")
+    ]
+    summary = "\n".join(summary_lines).strip() or None
+    return summary, parameter_descriptions
+
+async def _format_awaitable_result(awaitable: Awaitable[Any]) -> str:
+    result = await awaitable
+    if isinstance(result, str):
+        return result
+    return json.dumps(result, ensure_ascii=False)

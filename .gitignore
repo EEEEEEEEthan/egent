@@ -1,0 +1,11 @@
+/__pycache__/
+**/__pycache__/
+/.pytest_cache/
+/.ruff_cache/
+/.temp/
+/.data/
+/.logs/
+*.egg-info/
+/dist/
+/build/
+.egent/
