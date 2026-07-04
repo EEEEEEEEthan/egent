@@ -37,39 +37,39 @@ def _matches_path_patterns(relative_text: str, patterns: tuple[str, ...]) -> boo
 class EgentPathValidator(egent.builtin_tools.path_validator.PathValidator):
     """示例用路径校验：cwd 内可发现，敏感文件禁读写，搜索排除噪声路径。"""
 
-    def _relative_posix(self, path: Path) -> str | None:
+    def __relative_posix(self, path: Path) -> str | None:
         try:
             return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
         except ValueError:
             return None
 
-    def _is_sensitive(self, path: Path) -> bool:
-        relative_text = self._relative_posix(path)
+    def __is_sensitive(self, path: Path) -> bool:
+        relative_text = self.__relative_posix(path)
         if relative_text is None:
             return False
         return _matches_path_patterns(relative_text, _SENSITIVE_PATTERNS)
 
-    def _is_search_excluded(self, path: Path) -> bool:
-        relative_text = self._relative_posix(path)
+    def __is_search_excluded(self, path: Path) -> bool:
+        relative_text = self.__relative_posix(path)
         if relative_text is None:
             return True
         return _matches_path_patterns(relative_text, _SEARCH_EXCLUDED_PATTERNS)
 
     @override
     def _is_discoverable(self, path: Path) -> bool:
-        return self._relative_posix(path) is not None
+        return self.__relative_posix(path) is not None
 
     @override
     def _is_readable(self, path: Path) -> bool:
-        return self._relative_posix(path) is not None and not self._is_sensitive(path)
+        return self.__relative_posix(path) is not None and not self.__is_sensitive(path)
 
     @override
     def _is_editable(self, path: Path) -> bool:
-        return self._relative_posix(path) is not None and not self._is_sensitive(path)
+        return self.__relative_posix(path) is not None and not self.__is_sensitive(path)
 
     @override
     def _is_searchable(self, path: Path) -> bool:
-        return self._relative_posix(path) is not None and not self._is_search_excluded(path)
+        return self.__relative_posix(path) is not None and not self.__is_search_excluded(path)
 
 
 def reload_modules() -> str:  # pylint: disable=import-outside-toplevel

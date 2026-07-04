@@ -15,11 +15,11 @@ class ConversationPrinter:
 
     def __init__(self, conversation: egent.conversation.Conversation) -> None:
         self._conversation = conversation
-        conversation.on_event(self._handle_event)
+        conversation.on_event(self.__handle_event)
 
     def close(self) -> None:
         """取消事件监听。"""
-        self._conversation.off_event(self._handle_event)
+        self._conversation.off_event(self.__handle_event)
 
     def __enter__(self) -> ConversationPrinter:
         return self
@@ -45,7 +45,7 @@ class ConversationPrinter:
         ):
             pass
 
-    def _handle_event(self, event: egent.conversation.ConversationEvent) -> None:
+    def __handle_event(self, event: egent.conversation.ConversationEvent) -> None:
         if isinstance(event, egent.conversation.TextDelta):
             print(event.text, end="", flush=True)
         elif isinstance(event, egent.conversation.ToolCallStarted):

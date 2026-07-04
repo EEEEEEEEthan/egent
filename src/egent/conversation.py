@@ -174,7 +174,7 @@ class Conversation:
         """移除流式事件监听器。"""
         self._event_listeners.remove(listener)
 
-    def _emit_event(self, event: ConversationEvent) -> None:
+    def __emit_event(self, event: ConversationEvent) -> None:
         for listener in self._event_listeners:
             listener(event)
 
@@ -208,7 +208,7 @@ class Conversation:
         )
 
         def emit(event: ConversationEvent) -> ConversationEvent:
-            self._emit_event(event)
+            self.__emit_event(event)
             return event
 
         async def run_tool_call(tool_call: ChatCompletionMessageToolCall) -> AsyncIterator[ConversationEvent]:

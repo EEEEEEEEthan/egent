@@ -45,7 +45,7 @@ class _RejectPathPrefixValidator(_UnderRootValidator):
         super().__init__(root)
         self._pattern = pattern
 
-    def _is_path_ignored(self, path: Path) -> bool:
+    def __is_path_ignored(self, path: Path) -> bool:
         try:
             relative_text = path.resolve().relative_to(self._root).as_posix()
         except ValueError:
@@ -54,19 +54,19 @@ class _RejectPathPrefixValidator(_UnderRootValidator):
 
     @override
     def _is_discoverable(self, path: Path) -> bool:
-        return not self._is_path_ignored(path) and super()._is_discoverable(path)
+        return not self.__is_path_ignored(path) and super()._is_discoverable(path)
 
     @override
     def _is_readable(self, path: Path) -> bool:
-        return not self._is_path_ignored(path) and super()._is_readable(path)
+        return not self.__is_path_ignored(path) and super()._is_readable(path)
 
     @override
     def _is_editable(self, path: Path) -> bool:
-        return not self._is_path_ignored(path) and super()._is_editable(path)
+        return not self.__is_path_ignored(path) and super()._is_editable(path)
 
     @override
     def _is_searchable(self, path: Path) -> bool:
-        return not self._is_path_ignored(path) and super()._is_searchable(path)
+        return not self.__is_path_ignored(path) and super()._is_searchable(path)
 
 
 def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathValidator:
