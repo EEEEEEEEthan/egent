@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable
 from pathlib import Path, PurePosixPath
 from typing import override
 
 import egent.builtin_tools.path_validator
-import egent.conversation
 import egent.tool
 
 _SENSITIVE_PATTERNS: tuple[str, ...] = (
@@ -71,25 +70,6 @@ class EgentPathValidator(egent.builtin_tools.path_validator.PathValidator):
     @override
     def _is_searchable(self, path: Path) -> bool:
         return self._relative_posix(path) is not None and not self._is_search_excluded(path)
-
-
-def print_stream_event(event: object) -> None:
-    """将对话流事件打印到终端。"""
-    if isinstance(event, egent.conversation.TextDelta):
-        print(event.text, end="", flush=True)
-    elif isinstance(event, egent.conversation.ToolCallStarted):
-        print(f"\n[tool_call: {event.name}]", flush=True)
-    elif isinstance(event, egent.conversation.TurnCompleted):
-        print(flush=True)
-
-
-async def request_and_print(
-    conversation: egent.conversation.Conversation,
-    tools: Iterable[egent.tool.ToolCallable],
-) -> None:
-    """执行一轮工具调用请求并打印流式输出。"""
-    async for event in conversation.request(tools=tools):
-        print_stream_event(event)
 
 
 def reload_modules() -> str:  # pylint: disable=import-outside-toplevel

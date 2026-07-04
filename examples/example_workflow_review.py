@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import _common
+import conversation_printer
 import egent
 import egent.conversation
 
@@ -20,6 +21,7 @@ async def review(prompt: str) -> tuple[bool, str]:
         (passed, message): 是否通过验收，及验收意见摘要。
     """
     reviewer = egent.conversation.Conversation("gpt5")
+    conversation_printer.ConversationPrinter(reviewer)
     reviewer.add_message(
         "system",
         "你是这个项目的验收员。你需要验收开发成果是否满足需求。"
@@ -44,6 +46,5 @@ async def review(prompt: str) -> tuple[bool, str]:
     submitted = await reviewer.request_submit(
         {"is_accepted": (bool, "是否通过验收"), "summary": (str, "验收意见摘要")},
         (*file_read_tools, *egent.builtin_tools.git_tools.read_only_tools),
-        on_event=_common.print_stream_event,
     )
     return submitted["is_accepted"], submitted["summary"]

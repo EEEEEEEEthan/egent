@@ -13,13 +13,17 @@ from pathlib import Path
 import example_workflow_develop
 import example_workflow_todo
 import _common
+import conversation_printer
 from egent import builtin_tools
 from egent.conversation import Conversation
 
 _EXAMPLE_GREET_SKILL = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "example-greet"
 
 
-async def run_turn(conversation: Conversation) -> None:
+async def run_turn(
+    conversation: Conversation,
+    printer: conversation_printer.ConversationPrinter,
+) -> None:
     """运行一轮交互：收集用户输入并发送请求。
 
     每次 turn 重新构建工具列表、路径校验器和文件读取工具，
@@ -28,7 +32,7 @@ async def run_turn(conversation: Conversation) -> None:
     path_validator = _common.EgentPathValidator()
     file_read_tools = builtin_tools.file_system_tools.get_read_tools(path_validator)
     conversation.add_message("user", input(">>> ").strip())
-    await _common.request_and_print(conversation, [
+    await printer.request(tools=[
         *conversation.skill_tools,
         *file_read_tools,
         *builtin_tools.git_tools.read_only_tools,
@@ -56,8 +60,9 @@ async def async_main() -> int:
         那么你就应该拆成多个任务或者多个步骤,依次交给你的手下,每做完一个任务提交一次.每做完一个提交一个.
         """,
     )
+    printer = conversation_printer.ConversationPrinter(conversation)
     while True:
-        await run_turn(conversation)
+        await run_turn(conversation, printer)
 
 
 if __name__ == "__main__":

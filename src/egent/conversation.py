@@ -149,6 +149,7 @@ class Conversation:
         )
         self.model = model_settings.model_name
         self._messages: list[ChatMessage] = []
+        self._event_listeners: list[Callable[[ConversationEvent], None]] = []
         skill_index, skill_catalog = build_skills(skills)
         self.skill_tools = egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
         if skill_index:
@@ -164,6 +165,18 @@ class Conversation:
         """返回最后一条消息的 content 文本。"""
         content = self._messages[-1].get("content")
         return content if isinstance(content, str) else ""
+
+    def on_event(self, listener: Callable[[ConversationEvent], None]) -> None:
+        """注册流式事件监听器。"""
+        self._event_listeners.append(listener)
+
+    def off_event(self, listener: Callable[[ConversationEvent], None]) -> None:
+        """移除流式事件监听器。"""
+        self._event_listeners.remove(listener)
+
+    def _emit_event(self, event: ConversationEvent) -> None:
+        for listener in self._event_listeners:
+            listener(event)
 
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。"""
@@ -194,10 +207,14 @@ class Conversation:
             {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in resolved_tools}
         )
 
+        def emit(event: ConversationEvent) -> ConversationEvent:
+            self._emit_event(event)
+            return event
+
         async def run_tool_call(tool_call: ChatCompletionMessageToolCall) -> AsyncIterator[ConversationEvent]:
             function_name = tool_call.function.name
             function_arguments = tool_call.function.arguments
-            yield ToolCallStarted(name=function_name, arguments=function_arguments)
+            yield emit(ToolCallStarted(name=function_name, arguments=function_arguments))
             try:
                 handler = tool_handlers.get(function_name)
                 if handler is None:
@@ -208,11 +225,11 @@ class Conversation:
             except Exception as exception:  # pylint: disable=broad-exception-caught
                 handler_result = str(exception)
             tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
-            yield ToolCallExecuted(
+            yield emit(ToolCallExecuted(
                 name=function_name,
                 arguments=function_arguments,
                 result=tool_message["content"],
-            )
+            ))
 
         while True:
             async with self._client.chat.completions.stream(
@@ -222,14 +239,14 @@ class Conversation:
             ) as stream:
                 async for event in stream:
                     if event.type == "content.delta":
-                        yield TextDelta(event.delta)
+                        yield emit(TextDelta(event.delta))
                 completion = await stream.get_final_completion()
             message = completion.choices[0].message
             reply_text = message.content or ""
             tool_calls = message.tool_calls or []
             if not tool_calls:
                 self.add_message("assistant", reply_text)
-                yield TurnCompleted(reply_text)
+                yield emit(TurnCompleted(reply_text))
                 return
             self.add_message(
                 "assistant",
@@ -244,15 +261,12 @@ class Conversation:
         self,
         submit_fields: dict[str, tuple[type, str]],
         tools: Iterable[egent.tool.ToolCallable],
-        *,
-        on_event: Callable[[ConversationEvent], None] | None = None,
     ) -> dict[str, Any]:
         """循环请求直至 ``submit_task`` 工具被调用，返回提交的参数。
 
         Args:
             submit_fields: submit 参数规格，``字段名 -> (类型, 描述)``。
             tools: 本步可用的工具函数列表。
-            on_event: 可选的流式事件回调（如打印到终端）。
 
         Returns:
             agent 提交的参数，key 与 ``submit_fields`` 一致。
@@ -279,12 +293,11 @@ class Conversation:
         tools = tuple(tools)
         self.add_message("system", _SUBMIT_REMINDER)
         while submitted_arguments is None:
-            async for event in self.request(
+            async for _event in self.request(
                 tools=tools,
                 resolved_tools=((submit_schema, submit_handler),),
             ):
-                if on_event is not None:
-                    on_event(event)
+                pass
             if submitted_arguments is None:
                 self.add_message("system", _SUBMIT_REMINDER)
 

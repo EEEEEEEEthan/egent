@@ -63,7 +63,6 @@ async def coding(
             *write_tools,
             *egent.builtin_tools.git_tools.read_only_tools,
         ),
-        on_event=_common.print_stream_event,
     )
     if not submitted["success"]:
         raise CodingGaveUp(submitted["reason"])

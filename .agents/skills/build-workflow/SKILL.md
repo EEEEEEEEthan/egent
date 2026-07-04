@@ -21,7 +21,6 @@ async def my_step(conversation: Conversation, input: str) -> tuple[bool, str]:
     submitted = await conversation.request_submit(
         {"success": (bool, "任务是否完成"), "summary": (str, "结果摘要")},
         tools,
-        on_event=_common.print_stream_event,  # 可省略；不需要输出时不传
     )
     return submitted["success"], submitted["summary"]
 ```
@@ -31,7 +30,7 @@ async def my_step(conversation: Conversation, input: str) -> tuple[bool, str]:
 - 第一个参数是 submit 参数规格 `字段名 -> (类型, 描述)`，即 agent 可见的提交接口；框架据此生成 `submit_task` 工具 schema 并校验参数
 - `request_submit` 循环请求直到 agent 调用 `submit_task`，直接返回提交的参数 dict，之后该步结束，流程回到 Python
 - submit 提醒由框架自动追加，system 消息里只需写任务本身
-- 流式事件通过 `on_event` 回调外抛（如 `_common.print_stream_event` 打到终端），不传则静默执行
+- 需要终端输出时，在 `Conversation` 上挂 `ConversationPrinter`（见 `examples/conversation_printer.py`）；不传则静默执行
 - 需要跨多轮保持上下文时，**复用同一个** `Conversation`；每步独立则 **新建** `Conversation`
 
 ## 编排：确定的流程
@@ -77,6 +76,6 @@ async def outer_workflow(description: str) -> str:
 | `example_workflow_coding.py` | 单步 + 程序侧后续动作 |
 | `example_workflow_review.py` | 单步收敛为确定结果 |
 | `example_workflow_develop.py` | 多步编排与子流程注册 |
-| `_common.py` | 示例用打印封装（非必需） |
+| `conversation_printer.py` | 终端流式输出（可选） |
 
 先读这些文件照抄结构，再按任务改 submit 字段、tools 和编排逻辑。

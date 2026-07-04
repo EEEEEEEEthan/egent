@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import _common
+import conversation_printer
 import example_workflow_coding
 import example_workflow_review
 import egent
@@ -36,6 +37,7 @@ async def begin_develop_workflow(
         (success, summary): success 为 True 表示验收通过。
     """
     ethan = egent.conversation.Conversation("gpt5-flash")
+    printer = conversation_printer.ConversationPrinter(ethan)
     ethan.add_message("system", "你是ethan，是这个项目的开发工程师")
     ethan.add_message(
         "system",
@@ -59,7 +61,7 @@ async def begin_develop_workflow(
                 "system",
                 f"验收通过！请总结本次工作。验收意见:\n{accept_message}",
             )
-            await _common.request_and_print(ethan, [])
+            await printer.request()
             return True, (
                 "工作顺利完成\n\n"
                 + ethan.last_message
@@ -74,7 +76,7 @@ async def begin_develop_workflow(
         )
 
     ethan.add_message("system", "你的工作无法顺利完成。请总结本次工作")
-    await _common.request_and_print(ethan, [])
+    await printer.request()
     return False, "工作无法顺利完成\n\n" + ethan.last_message
 
 
@@ -87,7 +89,10 @@ async def delegate_develop_workflow(description: str) -> str:
     return summary
 
 
-async def run_turn(conversation: egent.conversation.Conversation) -> None:
+async def run_turn(
+    conversation: egent.conversation.Conversation,
+    printer: conversation_printer.ConversationPrinter,
+) -> None:
     """运行一轮交互：收集用户输入并发送请求。"""
     prompt = input(">>> ").strip()
     if prompt == "/doit":
@@ -99,9 +104,8 @@ async def run_turn(conversation: egent.conversation.Conversation) -> None:
             那么你就应该拆成多个任务或者多个步骤,依次交给你的手下,每做完一个任务提交一次
             """
         )
-        await _common.request_and_print(
-            conversation,
-            [
+        await printer.request(
+            tools=[
                 *file_read_tools,
                 *egent.builtin_tools.git_tools.read_only_tools,
                 *conversation.skill_tools,
@@ -113,9 +117,8 @@ async def run_turn(conversation: egent.conversation.Conversation) -> None:
         conversation.add_message("system", "现在进入询问截断,你暂时不可以委派工作")
     else:
         conversation.add_message("user", prompt)
-        await _common.request_and_print(
-            conversation,
-            [
+        await printer.request(
+            tools=[
                 *file_read_tools,
                 *egent.builtin_tools.git_tools.read_only_tools,
                 *conversation.skill_tools,
@@ -136,8 +139,9 @@ async def async_main() -> int:
         在产品经理觉得这份计划ok的时候,会给你新的工具,这时候你就可以开始分配任务了
         """,
     )
+    printer = conversation_printer.ConversationPrinter(conversation)
     while True:
-        await run_turn(conversation)
+        await run_turn(conversation, printer)
 
 
 if __name__ == "__main__":
