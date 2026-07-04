@@ -56,7 +56,7 @@ async def coding(
     )
 
     conversation.add_message("system", prompt)
-    submitted = await conversation.request_until_submit(
+    submitted = await conversation.request_submit(
         {"success": (bool, "任务是否完成"), "reason": (str, "放弃任务时说明原因")},
         (
             *file_read_tools,

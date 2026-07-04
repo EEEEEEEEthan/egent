@@ -1,6 +1,6 @@
 ---
 name: build-workflow
-description: 用程序编排 egent 确定性工作流：通过 request_until_submit 收敛 agent 输出，再用 Python 控制流串联步骤。用于搭建编码/验收/开发等多步流程，或用户提到工作流、request_until_submit、submit_task 编排时。
+description: 用程序编排 egent 确定性工作流：通过 request_submit 收敛 agent 输出，再用 Python 控制流串联步骤。用于搭建编码/验收/开发等多步流程，或用户提到工作流、request_submit、submit_task 编排时。
 ---
 
 # 搭建工作流
@@ -10,7 +10,7 @@ description: 用程序编排 egent 确定性工作流：通过 request_until_sub
 ## 做什么
 
 1. 把任务拆成若干 **步骤函数**（`async def`）
-2. 需要 agent 完成的步骤，用 `request_until_submit` 跑到 **submit 被调用** 为止，拿到结构化结果
+2. 需要 agent 完成的步骤，用 `request_submit` 跑到 **submit 被调用** 为止，拿到结构化结果
 3. 用普通 Python（`if` / `for` / `return` / 调用其他步骤）把步骤串起来
 
 ## 单步：收敛 agent 输出
@@ -18,7 +18,7 @@ description: 用程序编排 egent 确定性工作流：通过 request_until_sub
 ```python
 async def my_step(conversation: Conversation, input: str) -> tuple[bool, str]:
     conversation.add_message("system", input)
-    submitted = await conversation.request_until_submit(
+    submitted = await conversation.request_submit(
         {"success": (bool, "任务是否完成"), "summary": (str, "结果摘要")},
         tools,
         on_event=_common.print_stream_event,  # 可省略；不需要输出时不传
@@ -29,7 +29,7 @@ async def my_step(conversation: Conversation, input: str) -> tuple[bool, str]:
 要点：
 
 - 第一个参数是 submit 参数规格 `字段名 -> (类型, 描述)`，即 agent 可见的提交接口；框架据此生成 `submit_task` 工具 schema 并校验参数
-- `request_until_submit` 循环请求直到 agent 调用 `submit_task`，直接返回提交的参数 dict，之后该步结束，流程回到 Python
+- `request_submit` 循环请求直到 agent 调用 `submit_task`，直接返回提交的参数 dict，之后该步结束，流程回到 Python
 - submit 提醒由框架自动追加，system 消息里只需写任务本身
 - 流式事件通过 `on_event` 回调外抛（如 `_common.print_stream_event` 打到终端），不传则静默执行
 - 需要跨多轮保持上下文时，**复用同一个** `Conversation`；每步独立则 **新建** `Conversation`

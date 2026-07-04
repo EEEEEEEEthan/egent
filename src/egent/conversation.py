@@ -240,7 +240,7 @@ class Conversation:
                 async for tool_event in run_tool_call(tool_call):
                     yield tool_event
 
-    async def request_until_submit(
+    async def request_submit(
         self,
         submit_fields: dict[str, tuple[type, str]],
         tools: Iterable[egent.tool.ToolCallable],
