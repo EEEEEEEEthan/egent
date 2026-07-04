@@ -17,8 +17,6 @@ path_validator = _common.EgentPathValidator()
 file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
 file_write_tools = egent.builtin_tools.file_system_tools.get_edit_tools(path_validator)
 
-_TASK_REMINDER = "工作完成后使用 submit_task 工具提交结果，然后回复 `工作结束` 即可"
-
 
 class CodingGaveUp(Exception):
     """开发者主动放弃任务。"""
@@ -51,33 +49,24 @@ async def coding(
     Raises:
         CodingGaveUp: 开发者放弃任务。
     """
-    done = False
-    giveup_reason = ""
-
-    def submit_task(success: bool, reason: str) -> str:
-        nonlocal done, giveup_reason
-        done = success
-        giveup_reason = reason
-        return "收到"
-
     write_tools = (
         egent.builtin_tools.file_system_tools.get_edit_tools(custom_path_validator)
         if custom_path_validator is not None
         else file_write_tools
     )
 
-    conversation.add_message("system", f"{prompt}\n\n{_TASK_REMINDER}")
-    await _common.request_until_submit_and_print(
-        conversation,
-        submit_task,
+    conversation.add_message("system", prompt)
+    submitted = await conversation.request_until_submit(
+        {"success": (bool, "任务是否完成"), "reason": (str, "放弃任务时说明原因")},
         (
             *file_read_tools,
             *write_tools,
             *egent.builtin_tools.git_tools.read_only_tools,
         ),
+        on_event=_common.print_stream_event,
     )
-    if not done:
-        raise CodingGaveUp(giveup_reason)
+    if not submitted["success"]:
+        raise CodingGaveUp(submitted["reason"])
 
     pytest_result = subprocess.run(
         [sys.executable, "-m", "pytest"],

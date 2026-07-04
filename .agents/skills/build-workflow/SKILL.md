@@ -17,26 +17,21 @@ description: 用程序编排 egent 确定性工作流：通过 request_until_sub
 
 ```python
 async def my_step(conversation: Conversation, input: str) -> tuple[bool, str]:
-    done = False
-    result_text = ""
-
-    def submit_task(success: bool, summary: str) -> str:
-        nonlocal done, result_text
-        done = success
-        result_text = summary
-        return "收到"
-
-    conversation.add_message("system", f"{input}\n\n工作完成后使用 submit_task 提交，然后回复 `工作结束`")
-    async for _event in conversation.request_until_submit(submit_task, tools):
-        pass  # 按需处理流式事件；不需要输出时可忽略
-    return done, result_text
+    conversation.add_message("system", input)
+    submitted = await conversation.request_until_submit(
+        {"success": (bool, "任务是否完成"), "summary": (str, "结果摘要")},
+        tools,
+        on_event=_common.print_stream_event,  # 可省略；不需要输出时不传
+    )
+    return submitted["success"], submitted["summary"]
 ```
 
 要点：
 
-- `submit_task` 签名即 agent 可见的提交接口；用闭包变量接住返回值
-- 核心是 `conversation.request_until_submit(submit_task, tools)`；循环请求直到 agent 调用 submit，之后该步结束，流程回到 Python
-- 示例里的 `request_until_submit_and_print` 只是把流式事件打到终端，可换成自己的事件处理或 `async for ...: pass`
+- 第一个参数是 submit 参数规格 `字段名 -> (类型, 描述)`，即 agent 可见的提交接口；框架据此生成 `submit_task` 工具 schema 并校验参数
+- `request_until_submit` 循环请求直到 agent 调用 `submit_task`，直接返回提交的参数 dict，之后该步结束，流程回到 Python
+- submit 提醒由框架自动追加，system 消息里只需写任务本身
+- 流式事件通过 `on_event` 回调外抛（如 `_common.print_stream_event` 打到终端），不传则静默执行
 - 需要跨多轮保持上下文时，**复用同一个** `Conversation`；每步独立则 **新建** `Conversation`
 
 ## 编排：确定的流程
@@ -65,10 +60,10 @@ async def outer_workflow(description: str) -> str:
 
 ```
 - [ ] 定义每步的输入/输出类型（如 tuple[bool, str]）
-- [ ] 写 submit 回调，明确 agent 要提交哪些字段
+- [ ] 写 submit 参数规格 dict，明确 agent 要提交哪些字段
 - [ ] 选定 Conversation 复用或隔离策略
 - [ ] 配置该步 tools 白名单
-- [ ] 在 system 消息里写清任务与 submit 提醒
+- [ ] 在 system 消息里写清任务（submit 提醒由框架自动追加）
 - [ ] 用 if/for/return 把各步串成完整流程
 - [ ] 需要时把子流程注册为 ToolCallable 供上层 agent 调用
 ```

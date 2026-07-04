@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 import pathlib
 import re
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
+import pydantic
 from openai import AsyncOpenAI, NOT_GIVEN
+from openai.lib import pydantic_function_tool
 from openai.types.chat import ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_tool_union_param import (
+    ChatCompletionToolUnionParam,
+)
 
 import egent._line_position
 import egent.limits
@@ -27,7 +31,7 @@ ChatMessage = dict[str, Any]
 
 _EGENT_TEMP_DIR = pathlib.Path.cwd() / ".egent" / ".temp"
 _EGENT_LOG_DIR = pathlib.Path.cwd() / ".egent" / ".logs"
-_SUBMIT_REMINDER = "工作完成后使用 submit 工具提交结果"
+_SUBMIT_REMINDER = "工作完成后使用 submit_task 工具提交结果"
 _SUMMARIZE_SYSTEM = (
     "请将以下对话历史压缩为简洁摘要，保留关键决策、已完成工作、"
     "当前代码状态与待解决问题。"
@@ -122,10 +126,6 @@ class TurnCompleted(ConversationEvent):
     text: str
 
 
-@dataclass(frozen=True)
-class SubmitCompleted(ConversationEvent):
-    """submit 工具已调用，任务循环结束。"""
-
 
 class Conversation:
     """维护 messages 历史并调用 Chat Completions API。"""
@@ -178,9 +178,21 @@ class Conversation:
         self,
         *,
         tools: Iterable[egent.tool.ToolCallable] = (),
+        resolved_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> AsyncIterator[ConversationEvent]:
-        """根据当前历史流式请求助手回复，必要时自动执行工具并续聊。"""
+        """根据当前历史流式请求助手回复，必要时自动执行工具并续聊。
+
+        Args:
+            tools: 普通工具函数列表，自动生成 schema。
+            resolved_tools: 已就绪的 (schema, handler) 对，供框架注入
+                无法用普通函数表达的工具（如 submit）。
+        """
         api_tools, tool_handlers = egent.tool.resolve_tools(list(tools))
+        resolved_tools = tuple(resolved_tools)
+        api_tools.extend(tool_schema for tool_schema, _ in resolved_tools)
+        tool_handlers.update(
+            {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in resolved_tools}
+        )
 
         async def run_tool_call(tool_call: ChatCompletionMessageToolCall) -> AsyncIterator[ConversationEvent]:
             function_name = tool_call.function.name
@@ -230,28 +242,53 @@ class Conversation:
 
     async def request_until_submit(
         self,
-        submit_tool: egent.tool.ToolCallable,
+        submit_fields: dict[str, tuple[type, str]],
         tools: Iterable[egent.tool.ToolCallable],
-    ) -> AsyncIterator[ConversationEvent]:
-        """循环请求直至 submit 工具被调用。"""
-        submitted = False
+        *,
+        on_event: Callable[[ConversationEvent], None] | None = None,
+    ) -> dict[str, Any]:
+        """循环请求直至 ``submit_task`` 工具被调用，返回提交的参数。
 
-        def submit_handler(**kwargs: object) -> str:
-            nonlocal submitted
-            submitted = True
-            return submit_tool(**kwargs)
+        Args:
+            submit_fields: submit 参数规格，``字段名 -> (类型, 描述)``。
+            tools: 本步可用的工具函数列表。
+            on_event: 可选的流式事件回调（如打印到终端）。
 
-        submit_handler.__name__ = submit_tool.__name__
-        submit_handler.__signature__ = inspect.signature(submit_tool)
-        submit_handler.__doc__ = submit_tool.__doc__
+        Returns:
+            agent 提交的参数，key 与 ``submit_fields`` 一致。
+        """
+        submit_model = pydantic.create_model(
+            "submit_task",
+            **{
+                field_name: (field_type, pydantic.Field(description=field_description))
+                for field_name, (field_type, field_description) in submit_fields.items()
+            },
+        )
+        submit_schema = pydantic_function_tool(
+            submit_model,
+            name="submit_task",
+            description="提交任务结果，结束当前工作循环",
+        )
+        submitted_arguments: dict[str, Any] | None = None
 
-        while not submitted:
-            async for event in self.request(tools=(*tools, submit_handler)):
-                yield event
-            if not submitted:
+        def submit_handler(arguments_json: str) -> str:
+            nonlocal submitted_arguments
+            submitted_arguments = submit_model.model_validate_json(arguments_json).model_dump()
+            return "收到"
+
+        tools = tuple(tools)
+        self.add_message("system", _SUBMIT_REMINDER)
+        while submitted_arguments is None:
+            async for event in self.request(
+                tools=tools,
+                resolved_tools=((submit_schema, submit_handler),),
+            ):
+                if on_event is not None:
+                    on_event(event)
+            if submitted_arguments is None:
                 self.add_message("system", _SUBMIT_REMINDER)
 
-        yield SubmitCompleted()
+        return submitted_arguments
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""

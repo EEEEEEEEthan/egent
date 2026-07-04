@@ -12,8 +12,6 @@ import egent.conversation
 path_validator = _common.EgentPathValidator()
 file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
 
-_TASK_REMINDER = "工作完成后使用 submit_task 工具提交结果，然后回复 `工作结束` 即可"
-
 
 async def review(prompt: str) -> tuple[bool, str]:
     """验收开发成果是否满足需求。
@@ -32,15 +30,6 @@ async def review(prompt: str) -> tuple[bool, str]:
         "- 注释应解释\u201c为什么\u201d这样做，而非重复\u201c做了什么\u201d\n"
         "- 涉及刻意设计决策的代码必须有注释说明意图",
     )
-    accepted = False
-    accept_summary = ""
-
-    def submit_task(is_accepted: bool, summary: str) -> str:
-        nonlocal accepted, accept_summary
-        accepted = is_accepted
-        accept_summary = summary
-        return "收到"
-
     reviewer.add_message(
         "system",
         f"请验收以下开发成果：\n\n"
@@ -50,12 +39,11 @@ async def review(prompt: str) -> tuple[bool, str]:
         "2. 使用 git_diff 确认代码变更范围\n"
         "3. 使用 read_file 仔细检查关键变更文件\n"
         "4. 对照需求逐一核对是否满足\n"
-        "5. 使用 submit_task 提交验收结果\n\n"
-        f"{_TASK_REMINDER}",
+        "5. 使用 submit_task 提交验收结果",
     )
-    await _common.request_until_submit_and_print(
-        reviewer,
-        submit_task,
+    submitted = await reviewer.request_until_submit(
+        {"is_accepted": (bool, "是否通过验收"), "summary": (str, "验收意见摘要")},
         (*file_read_tools, *egent.builtin_tools.git_tools.read_only_tools),
+        on_event=_common.print_stream_event,
     )
-    return accepted, accept_summary
+    return submitted["is_accepted"], submitted["summary"]

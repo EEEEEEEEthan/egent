@@ -79,6 +79,8 @@ def print_stream_event(event: object) -> None:
         print(event.text, end="", flush=True)
     elif isinstance(event, egent.conversation.ToolCallStarted):
         print(f"\n[tool_call: {event.name}]", flush=True)
+    elif isinstance(event, egent.conversation.TurnCompleted):
+        print(flush=True)
 
 
 async def request_and_print(
@@ -88,18 +90,6 @@ async def request_and_print(
     """执行一轮工具调用请求并打印流式输出。"""
     async for event in conversation.request(tools=tools):
         print_stream_event(event)
-    print()
-
-
-async def request_until_submit_and_print(
-    conversation: egent.conversation.Conversation,
-    submit_tool: egent.tool.ToolCallable,
-    tools: Iterable[egent.tool.ToolCallable],
-) -> None:
-    """循环请求直至 submit 工具被调用，并打印流式输出。"""
-    async for event in conversation.request_until_submit(submit_tool, tools):
-        print_stream_event(event)
-    print()
 
 
 def reload_modules() -> str:  # pylint: disable=import-outside-toplevel
