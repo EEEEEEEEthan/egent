@@ -26,7 +26,7 @@ def test_read_only_tools_contains_expected_functions() -> None:
 
 
 def test_write_only_tools_contains_expected_functions() -> None:
-    """write_only_tools 应包含 11 个写入工具函数。"""
+    """write_only_tools 应包含 12 个写入工具函数。"""
     expected = {
         git_tools_mod.git_init,
         git_tools_mod.git_clone,
@@ -39,10 +39,11 @@ def test_write_only_tools_contains_expected_functions() -> None:
         git_tools_mod.git_merge,
         git_tools_mod.git_reset,
         git_tools_mod.git_stash,
+        git_tools_mod.git_clean,
     }
 
     assert set(git_tools_mod.write_only_tools) == expected
-    assert len(git_tools_mod.write_only_tools) == 11
+    assert len(git_tools_mod.write_only_tools) == 12
 
 
 def test_no_overlap_between_read_and_write() -> None:
@@ -52,9 +53,9 @@ def test_no_overlap_between_read_and_write() -> None:
     assert overlap == set(), f"重叠函数：{overlap}"
 
 
-def test_all_17_tools_covered() -> None:
-    """两个列表合计应覆盖全部 17 个 git 工具函数。"""
-    all_17 = {
+def test_all_18_tools_covered() -> None:
+    """两个列表合计应覆盖全部 18 个 git 工具函数。"""
+    all_18 = {
         git_tools_mod.git_status, git_tools_mod.git_branch,
         git_tools_mod.git_log, git_tools_mod.git_diff,
         git_tools_mod.git_remote, git_tools_mod.git_tag,
@@ -63,12 +64,12 @@ def test_all_17_tools_covered() -> None:
         git_tools_mod.git_push, git_tools_mod.git_pull,
         git_tools_mod.git_fetch, git_tools_mod.git_checkout,
         git_tools_mod.git_merge, git_tools_mod.git_reset,
-        git_tools_mod.git_stash,
+        git_tools_mod.git_stash, git_tools_mod.git_clean,
     }
     combined = set(git_tools_mod.read_only_tools) | set(git_tools_mod.write_only_tools)
 
-    assert combined == all_17
-    assert len(combined) == 17
+    assert combined == all_18
+    assert len(combined) == 18
 
 
 def test_lists_contain_functions_not_strings() -> None:
@@ -95,11 +96,11 @@ def test_resolve_tools_accepts_write_only_tools() -> None:
     """resolve_tools 应能接受 write_only_tools 列表。"""
     api_tools, handlers = egent.tool.resolve_tools(git_tools_mod.write_only_tools)
 
-    assert len(api_tools) == 11
-    assert len(handlers) == 11
+    assert len(api_tools) == 12
+    assert len(handlers) == 12
     for name in ("git_init", "git_clone", "git_add", "git_commit",
                  "git_push", "git_pull", "git_fetch", "git_checkout",
-                 "git_merge", "git_reset", "git_stash"):
+                 "git_merge", "git_reset", "git_stash", "git_clean"):
         assert name in handlers
 
 

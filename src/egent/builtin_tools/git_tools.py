@@ -24,6 +24,7 @@ __all__ = [
     "git_remote",
     "git_reset",
     "git_stash",
+    "git_clean",
     "git_tag",
     "read_only_tools",
     "write_only_tools",
@@ -254,6 +255,27 @@ def git_stash(action: str = "list", path: str | None = None) -> str:
     return _run_git(args, path)
 
 
+def git_clean(
+    directories: bool = True,
+    dry_run: bool = False,
+    path: str | None = None,
+) -> str:
+    """清理未跟踪的文件与目录。
+
+    @param directories 是否同时删除未跟踪目录（-d），缺省 True
+    @param dry_run 仅预览将删除的内容不实际删除（-n），缺省 False
+    @param path 仓库目录路径，缺省为当前工作目录
+    """
+    args = ["clean"]
+    if dry_run:
+        args.append("-n")
+    else:
+        args.append("-f")
+    if directories:
+        args.append("-d")
+    return _run_git(args, path)
+
+
 def git_tag(path: str | None = None) -> str:
     """列出所有标签。
 
@@ -283,4 +305,5 @@ write_only_tools: list = [
     git_merge,
     git_reset,
     git_stash,
+    git_clean,
 ]
