@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Chat Completions 多轮对话与工具调用封装"
 requires-python = ">=3.13"
 dependencies = [
+    "httpx>=0.27",
     "openai>=1.68.0",
 ]
 

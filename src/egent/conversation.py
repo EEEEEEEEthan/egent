@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import pathlib
 import re
@@ -10,10 +11,11 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
+import httpx
 import pydantic
-from openai import AsyncOpenAI, NOT_GIVEN
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, NOT_GIVEN, RateLimitError
 from openai.lib import pydantic_function_tool
 from openai.types.chat import ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion_tool_union_param import (
@@ -38,7 +40,17 @@ _SUMMARIZE_SYSTEM = (
 )
 _SUMMARY_PREFIX = "此前工作摘要:\n"
 _SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
+_REQUEST_RETRY_COUNT = 3
+_REQUEST_RETRY_DELAY_SECONDS = 2.0
+_RETRYABLE_NETWORK_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    httpx.HTTPError,
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
+    APIStatusError,
+)
 _logger = logging.getLogger(__name__)
+_Result = TypeVar("_Result")
 
 
 def build_skills(
@@ -88,6 +100,30 @@ if not any(
     _file_handler.setFormatter(logging.Formatter("%(message)s"))
     _logger.setLevel(logging.INFO)
     _logger.addHandler(_file_handler)
+
+
+async def _run_with_network_retry(operation: Callable[[], Awaitable[_Result]]) -> _Result:
+    """网络异常时静默重试，不写入对话上下文。"""
+    last_error: BaseException | None = None
+    for attempt_index in range(_REQUEST_RETRY_COUNT):
+        try:
+            return await operation()
+        except _RETRYABLE_NETWORK_EXCEPTIONS as error:
+            if isinstance(error, APIStatusError) and error.status_code < 500:
+                raise
+            last_error = error
+            if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
+                break
+            _logger.warning(
+                "网络请求失败，%.0fs 后重试 (%d/%d): %s",
+                _REQUEST_RETRY_DELAY_SECONDS,
+                attempt_index + 1,
+                _REQUEST_RETRY_COUNT,
+                error,
+            )
+            await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
+    assert last_error is not None
+    raise last_error
 
 
 @dataclass(frozen=True)
@@ -232,15 +268,31 @@ class Conversation:
             ))
 
         while True:
-            async with self._client.chat.completions.stream(
-                model=self.model,
-                messages=self._messages,
-                tools=api_tools if api_tools else NOT_GIVEN,
-            ) as stream:
-                async for event in stream:
-                    if event.type == "content.delta":
-                        yield emit(TextDelta(event.delta))
-                completion = await stream.get_final_completion()
+            for attempt_index in range(_REQUEST_RETRY_COUNT):
+                try:
+                    async with self._client.chat.completions.stream(
+                        model=self.model,
+                        messages=self._messages,
+                        tools=api_tools if api_tools else NOT_GIVEN,
+                    ) as stream:
+                        async for event in stream:
+                            if event.type == "content.delta":
+                                yield emit(TextDelta(event.delta))
+                        completion = await stream.get_final_completion()
+                    break
+                except _RETRYABLE_NETWORK_EXCEPTIONS as error:
+                    if isinstance(error, APIStatusError) and error.status_code < 500:
+                        raise
+                    if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
+                        raise
+                    _logger.warning(
+                        "网络请求失败，%.0fs 后重试 (%d/%d): %s",
+                        _REQUEST_RETRY_DELAY_SECONDS,
+                        attempt_index + 1,
+                        _REQUEST_RETRY_COUNT,
+                        error,
+                    )
+                    await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
             message = completion.choices[0].message
             reply_text = message.content or ""
             tool_calls = message.tool_calls or []
@@ -328,12 +380,14 @@ class Conversation:
             if content:
                 summary_parts.append(f"[{role}]\n{content}")
 
-        response = await self._client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": _SUMMARIZE_SYSTEM},
-                {"role": "user", "content": "\n\n".join(summary_parts)},
-            ],
+        response = await _run_with_network_retry(
+            lambda: self._client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": _SUMMARIZE_SYSTEM},
+                    {"role": "user", "content": "\n\n".join(summary_parts)},
+                ],
+            ),
         )
         summary = response.choices[0].message.content or ""
         self._messages = deepcopy(system_prefix)
