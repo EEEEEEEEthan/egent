@@ -108,7 +108,6 @@ async def run_turn(
             tools=[
                 *file_read_tools,
                 *egent.builtin_tools.git_tools.read_only_tools,
-                *conversation.skill_tools,
                 delegate_develop_workflow,
                 egent.builtin_tools.git_tools.git_add,
                 egent.builtin_tools.git_tools.git_commit,
@@ -121,7 +120,6 @@ async def run_turn(
             tools=[
                 *file_read_tools,
                 *egent.builtin_tools.git_tools.read_only_tools,
-                *conversation.skill_tools,
                 egent.builtin_tools.git_tools.git_add,
                 egent.builtin_tools.git_tools.git_commit,
                 egent.builtin_tools.git_tools.git_push,

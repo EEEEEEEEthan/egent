@@ -33,7 +33,6 @@ async def run_turn(
     file_read_tools = builtin_tools.file_system_tools.get_read_tools(path_validator)
     conversation.add_message("user", input(">>> ").strip())
     await printer.request(tools=[
-        *conversation.skill_tools,
         *file_read_tools,
         *builtin_tools.git_tools.read_only_tools,
         builtin_tools.git_tools.git_add,

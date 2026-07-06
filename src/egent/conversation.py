@@ -187,7 +187,9 @@ class Conversation:
         self._messages: list[ChatMessage] = []
         self._event_listeners: list[Callable[[ConversationEvent], None]] = []
         skill_index, skill_catalog = build_skills(skills)
-        self.skill_tools = egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
+        self._skill_tools = (
+            egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
+        )
         if skill_index:
             self.add_message("system", skill_catalog)
 
@@ -232,11 +234,11 @@ class Conversation:
         """根据当前历史流式请求助手回复，必要时自动执行工具并续聊。
 
         Args:
-            tools: 普通工具函数列表，自动生成 schema。
+            tools: 普通工具函数列表，自动生成 schema；与构造时注册的技能工具自动合并。
             resolved_tools: 已就绪的 (schema, handler) 对，供框架注入
                 无法用普通函数表达的工具（如 submit）。
         """
-        api_tools, tool_handlers = egent.tool.resolve_tools(list(tools))
+        api_tools, tool_handlers = egent.tool.resolve_tools([*self._skill_tools, *tools])
         resolved_tools = tuple(resolved_tools)
         api_tools.extend(tool_schema for tool_schema, _ in resolved_tools)
         tool_handlers.update(
