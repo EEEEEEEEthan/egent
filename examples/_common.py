@@ -15,7 +15,6 @@ _SENSITIVE_PATTERNS: tuple[str, ...] = (
 )
 
 _SEARCH_EXCLUDED_PATTERNS: tuple[str, ...] = (
-    ".egent/.temp",
     "**/.model.toml",
     "**/.git",
     "**/*.pyc",
