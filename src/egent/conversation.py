@@ -23,6 +23,7 @@ from openai.types.chat.chat_completion_tool_union_param import (
 )
 
 import egent._line_position
+import egent.ephemeral_dirs
 import egent.limits
 import egent.model_settings
 import egent.builtin_tools.skill_tools
@@ -100,6 +101,7 @@ if not any(
     _file_handler.setFormatter(logging.Formatter("%(message)s"))
     _logger.setLevel(logging.INFO)
     _logger.addHandler(_file_handler)
+    egent.ephemeral_dirs.prune_oldest_files_in_directory(_EGENT_LOG_DIR)
 
 
 async def _run_with_network_retry(operation: Callable[[], Awaitable[_Result]]) -> _Result:
@@ -409,6 +411,7 @@ def _truncate_and_save(content: str, prefix: str) -> str:
     egent.model_settings.ensure_egent_gitignore()
     file_name = f"{prefix}-{uuid.uuid4().hex}.txt"
     (_EGENT_TEMP_DIR / file_name).write_text(content, encoding="utf-8")
+    egent.ephemeral_dirs.prune_oldest_files_in_directory(_EGENT_TEMP_DIR)
     relative_path = f".egent/.temp/{file_name}"
     file_lines = content.splitlines(keepends=True) or ([content] if content else [])
     next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
