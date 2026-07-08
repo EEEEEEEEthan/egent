@@ -193,6 +193,16 @@ class Conversation:
         if skill_index:
             self.add_message("system", skill_catalog)
 
+    def clone(self) -> Conversation:
+        """复制会话：共享模型配置与技能工具，深拷贝消息历史，不复制事件监听器。"""
+        cloned = Conversation.__new__(Conversation)
+        cloned._client = self._client
+        cloned.model = self.model
+        cloned._messages = deepcopy(self._messages)
+        cloned._event_listeners = []
+        cloned._skill_tools = self._skill_tools
+        return cloned
+
     @property
     def messages(self) -> list[ChatMessage]:
         """返回当前聊天记录的副本。"""
