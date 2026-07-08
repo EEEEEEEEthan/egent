@@ -33,7 +33,7 @@ class PathValidator(abc.ABC):
 
     def is_searchable(self, path: Path) -> bool:
         """路径是否允许参与内容搜索。"""
-        return self.is_discoverable(path) and self.is_readable(path) and self._is_searchable(path)
+        return self.is_readable(path) and self._is_searchable(path)
 
     @abc.abstractmethod
     def _is_discoverable(self, path: Path) -> bool:

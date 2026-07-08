@@ -50,13 +50,44 @@ class _IgnoredFileValidator(egent.builtin_tools.path_validator.PathValidator):
         return path != self._sample_file
 
 
-def test_is_searchable_requires_discoverable_and_readable(tmp_path: Path) -> None:
-    """is_searchable 应同时要求可发现与可读。"""
+def test_is_searchable_requires_readable(tmp_path: Path) -> None:
+    """is_searchable 应要求可读，但不要求可发现。"""
     sample_file = tmp_path / "sample.txt"
     sample_file.write_text("content", encoding="utf-8")
     path_validator = _ReadableOnlyFileValidator(sample_file)
 
     assert not path_validator.is_searchable(sample_file)
+
+
+class _UndiscoverableButSearchableValidator(egent.builtin_tools.path_validator.PathValidator):
+    def __init__(self, sample_file: Path) -> None:
+        self._sample_file = sample_file
+
+    @override
+    def _is_discoverable(self, path: Path) -> bool:
+        return False
+
+    @override
+    def _is_readable(self, path: Path) -> bool:
+        return path == self._sample_file
+
+    @override
+    def _is_editable(self, path: Path) -> bool:
+        return False
+
+    @override
+    def _is_searchable(self, path: Path) -> bool:
+        return path == self._sample_file
+
+
+def test_is_searchable_allows_undiscoverable_readable_path(tmp_path: Path) -> None:
+    """is_searchable 应允许不可发现但可读的路径（如隐藏目录内文件）。"""
+    sample_file = tmp_path / "sample.txt"
+    sample_file.write_text("content", encoding="utf-8")
+    path_validator = _UndiscoverableButSearchableValidator(sample_file)
+
+    assert not path_validator.is_discoverable(sample_file)
+    assert path_validator.is_searchable(sample_file)
 
 
 def test_is_searchable_rejects_ignored_path(tmp_path: Path) -> None:

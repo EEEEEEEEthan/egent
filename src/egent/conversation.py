@@ -23,6 +23,7 @@ from openai.types.chat.chat_completion_tool_union_param import (
 )
 
 import egent._line_position
+import egent.ephemeral_dirs
 import egent.limits
 import egent.model_settings
 import egent.builtin_tools.skill_tools
@@ -100,6 +101,7 @@ if not any(
     _file_handler.setFormatter(logging.Formatter("%(message)s"))
     _logger.setLevel(logging.INFO)
     _logger.addHandler(_file_handler)
+    egent.ephemeral_dirs.prune_oldest_files_in_directory(_EGENT_LOG_DIR)
 
 
 async def _run_with_network_retry(operation: Callable[[], Awaitable[_Result]]) -> _Result:
@@ -191,7 +193,7 @@ class Conversation:
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
         )
         if skill_index:
-            self.add_message("system", skill_catalog)
+            self.__add_message("system", skill_catalog)
 
     def clone(self) -> Conversation:
         """复制会话：共享模型配置与技能工具，深拷贝消息历史，不复制事件监听器。"""
@@ -226,14 +228,95 @@ class Conversation:
         for listener in self._event_listeners:
             listener(event)
 
-    def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
-        """追加一条消息，不发起请求。"""
-        truncated = _truncate_and_save(content, role)
-        message: ChatMessage = {"role": role, "content": truncated, **extra}
+    def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
+        """追加消息原文，不截断。供框架写入 agent 回复等。"""
+        message: ChatMessage = {"role": role, "content": content, **extra}
         self._messages.append(message)
         extra_text = f" | extra={extra}" if extra else ""
-        _logger.info("[%s %s] %s%s", datetime.now().strftime("%H:%M:%S"), role, truncated, extra_text)
+        _logger.info("[%s %s] %s%s", datetime.now().strftime("%H:%M:%S"), role, content, extra_text)
         return message
+
+    def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
+        """追加一条消息，不发起请求。超长内容会截断并落盘。"""
+        return self.__add_message(role, _truncate_and_save(content, role), **extra)
+
+    async def __run_tool_call(
+        self,
+        tool_call: ChatCompletionMessageToolCall,
+        tool_handlers: dict[str, egent.tool.ToolHandler],
+    ) -> AsyncIterator[ConversationEvent]:
+        function_name = tool_call.function.name
+        function_arguments = tool_call.function.arguments
+        started = ToolCallStarted(name=function_name, arguments=function_arguments)
+        self.__emit_event(started)
+        yield started
+        try:
+            handler = tool_handlers.get(function_name)
+            if handler is None:
+                raise ValueError(f"工具未注册: {function_name}")
+            handler_result = handler(function_arguments)
+            if isinstance(handler_result, Awaitable):
+                handler_result = await handler_result
+        except Exception as exception:  # pylint: disable=broad-exception-caught
+            handler_result = str(exception)
+        tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
+        executed = ToolCallExecuted(
+            name=function_name,
+            arguments=function_arguments,
+            result=tool_message["content"],
+        )
+        self.__emit_event(executed)
+        yield executed
+
+    async def __request_turn(
+        self,
+        api_tools: list[ChatCompletionToolUnionParam],
+        tool_handlers: dict[str, egent.tool.ToolHandler],
+    ) -> AsyncIterator[ConversationEvent]:
+        for attempt_index in range(_REQUEST_RETRY_COUNT):
+            try:
+                async with self._client.chat.completions.stream(
+                    model=self.model,
+                    messages=self._messages,
+                    tools=api_tools if api_tools else NOT_GIVEN,
+                ) as stream:
+                    async for event in stream:
+                        if event.type == "content.delta":
+                            text_delta = TextDelta(event.delta)
+                            self.__emit_event(text_delta)
+                            yield text_delta
+                    completion = await stream.get_final_completion()
+                break
+            except _RETRYABLE_NETWORK_EXCEPTIONS as error:
+                if isinstance(error, APIStatusError) and error.status_code < 500:
+                    raise
+                if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
+                    raise
+                _logger.warning(
+                    "网络请求失败，%.0fs 后重试 (%d/%d): %s",
+                    _REQUEST_RETRY_DELAY_SECONDS,
+                    attempt_index + 1,
+                    _REQUEST_RETRY_COUNT,
+                    error,
+                )
+                await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
+        message = completion.choices[0].message
+        reply_text = message.content or ""
+        tool_calls = message.tool_calls or []
+        if not tool_calls:
+            self.__add_message("assistant", reply_text)
+            turn_completed = TurnCompleted(reply_text)
+            self.__emit_event(turn_completed)
+            yield turn_completed
+            return
+        self.__add_message(
+            "assistant",
+            reply_text,
+            tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
+        )
+        for tool_call in tool_calls:
+            async for tool_event in self.__run_tool_call(tool_call, tool_handlers):
+                yield tool_event
 
     async def request(
         self,
@@ -255,71 +338,11 @@ class Conversation:
             {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in resolved_tools}
         )
 
-        def emit(event: ConversationEvent) -> ConversationEvent:
-            self.__emit_event(event)
-            return event
-
-        async def run_tool_call(tool_call: ChatCompletionMessageToolCall) -> AsyncIterator[ConversationEvent]:
-            function_name = tool_call.function.name
-            function_arguments = tool_call.function.arguments
-            yield emit(ToolCallStarted(name=function_name, arguments=function_arguments))
-            try:
-                handler = tool_handlers.get(function_name)
-                if handler is None:
-                    raise ValueError(f"工具未注册: {function_name}")
-                handler_result = handler(function_arguments)
-                if isinstance(handler_result, Awaitable):
-                    handler_result = await handler_result
-            except Exception as exception:  # pylint: disable=broad-exception-caught
-                handler_result = str(exception)
-            tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
-            yield emit(ToolCallExecuted(
-                name=function_name,
-                arguments=function_arguments,
-                result=tool_message["content"],
-            ))
-
         while True:
-            for attempt_index in range(_REQUEST_RETRY_COUNT):
-                try:
-                    async with self._client.chat.completions.stream(
-                        model=self.model,
-                        messages=self._messages,
-                        tools=api_tools if api_tools else NOT_GIVEN,
-                    ) as stream:
-                        async for event in stream:
-                            if event.type == "content.delta":
-                                yield emit(TextDelta(event.delta))
-                        completion = await stream.get_final_completion()
-                    break
-                except _RETRYABLE_NETWORK_EXCEPTIONS as error:
-                    if isinstance(error, APIStatusError) and error.status_code < 500:
-                        raise
-                    if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
-                        raise
-                    _logger.warning(
-                        "网络请求失败，%.0fs 后重试 (%d/%d): %s",
-                        _REQUEST_RETRY_DELAY_SECONDS,
-                        attempt_index + 1,
-                        _REQUEST_RETRY_COUNT,
-                        error,
-                    )
-                    await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
-            message = completion.choices[0].message
-            reply_text = message.content or ""
-            tool_calls = message.tool_calls or []
-            if not tool_calls:
-                self.add_message("assistant", reply_text)
-                yield emit(TurnCompleted(reply_text))
-                return
-            self.add_message(
-                "assistant",
-                reply_text,
-                tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
-            )
-            for tool_call in tool_calls:
-                async for tool_event in run_tool_call(tool_call):
-                    yield tool_event
+            async for event in self.__request_turn(api_tools, tool_handlers):
+                yield event
+                if isinstance(event, TurnCompleted):
+                    return
 
     async def request_submit(
         self,
@@ -355,7 +378,7 @@ class Conversation:
             return "收到"
 
         tools = tuple(tools)
-        self.add_message("system", _SUBMIT_REMINDER)
+        self.__add_message("system", _SUBMIT_REMINDER)
         while submitted_arguments is None:
             async for _event in self.request(
                 tools=tools,
@@ -363,7 +386,7 @@ class Conversation:
             ):
                 pass
             if submitted_arguments is None:
-                self.add_message("system", _SUBMIT_REMINDER)
+                self.__add_message("system", _SUBMIT_REMINDER)
 
         return submitted_arguments
 
@@ -403,7 +426,7 @@ class Conversation:
         )
         summary = response.choices[0].message.content or ""
         self._messages = deepcopy(system_prefix)
-        self.add_message("system", f"{_SUMMARY_PREFIX}{summary}")
+        self.__add_message("system", f"{_SUMMARY_PREFIX}{summary}")
         return summary
 
 
@@ -419,6 +442,7 @@ def _truncate_and_save(content: str, prefix: str) -> str:
     egent.model_settings.ensure_egent_gitignore()
     file_name = f"{prefix}-{uuid.uuid4().hex}.txt"
     (_EGENT_TEMP_DIR / file_name).write_text(content, encoding="utf-8")
+    egent.ephemeral_dirs.prune_oldest_files_in_directory(_EGENT_TEMP_DIR)
     relative_path = f".egent/.temp/{file_name}"
     file_lines = content.splitlines(keepends=True) or ([content] if content else [])
     next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
