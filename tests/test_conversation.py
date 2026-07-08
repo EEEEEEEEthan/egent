@@ -1,12 +1,44 @@
-"""conversation 网络重试单元测试。"""
+"""conversation 单元测试。"""
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 import httpx
 from openai import APIStatusError
 
+import egent.conversation
 from egent.conversation import _run_with_network_retry
+
+
+def test_conversation_clone_copies_messages_without_listeners(monkeypatch) -> None:
+    """clone 应共享模型配置与技能工具，深拷贝消息，不复制事件监听器。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+
+    leader = egent.conversation.Conversation("test")
+    leader.add_message("user", "hello")
+    leader.on_event(lambda _event: None)
+
+    reviewer = leader.clone()
+
+    assert reviewer is not leader
+    assert reviewer.model == leader.model
+    assert reviewer._client is leader._client
+    assert reviewer._skill_tools is leader._skill_tools
+    assert reviewer.messages == leader.messages
+    assert reviewer._messages is not leader._messages
+    assert reviewer._event_listeners == []
+
+    leader.add_message("assistant", "world")
+    assert leader.messages != reviewer.messages
 
 
 @pytest.mark.asyncio
