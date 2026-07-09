@@ -192,4 +192,4 @@ async def test_request_notifies_path_permissions_change(monkeypatch, tmp_path) -
         for message in agent._Agent__messages
         if message.get("role") == "system" and isinstance(message.get("content"), str)
     ]
-    assert "路径权限已更新" in system_messages
+    assert any("路径权限已更新" in message for message in system_messages)

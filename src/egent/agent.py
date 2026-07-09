@@ -290,11 +290,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             if self.__path_permissions is not None
             else ""
         )
-        if (
+        path_permissions_changed = (
             self.__path_permissions_text is not None
             and file_tools_state_text != self.__path_permissions_text
-        ):
-            self.__add_message("system", "路径权限已更新")
+        )
         self.__path_permissions_text = file_tools_state_text
         file_tools = egent.builtin_tools.file_system_tools.get_file_tools(self.__path_permissions)
         api_tools, tool_handlers = egent.tool.resolve_tools(
@@ -305,8 +304,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in extra_tools}
         )
         tool_schemas_text = json.dumps(api_tools, ensure_ascii=False, sort_keys=True)
-        if self.__tool_schemas_text is not None and tool_schemas_text != self.__tool_schemas_text:
-            self.__add_message("system", "工具集已更新")
+        tool_schemas_changed = (
+            self.__tool_schemas_text is not None and tool_schemas_text != self.__tool_schemas_text
+        )
+        if path_permissions_changed or tool_schemas_changed:
+            update_messages: list[str] = []
+            if path_permissions_changed:
+                update_messages.append("路径权限已更新")
+            if tool_schemas_changed:
+                update_messages.append("工具集已更新")
+            self.__add_message("system", "，".join(update_messages))
         self.__tool_schemas_text = tool_schemas_text
 
         while True:
