@@ -43,8 +43,8 @@ async def review(prompt: str) -> tuple[bool, str]:
         "4. 对照需求逐一核对是否满足\n"
         "5. 使用 submit_task 提交验收结果",
     )
+    reviewer.tools = (*file_read_tools, *egent.builtin_tools.git_tools.read_only_tools)
     submitted = await reviewer.request_submit(
         {"is_accepted": (bool, "是否通过验收"), "summary": (str, "验收意见摘要")},
-        (*file_read_tools, *egent.builtin_tools.git_tools.read_only_tools),
     )
     return submitted["is_accepted"], submitted["summary"]

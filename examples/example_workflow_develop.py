@@ -104,27 +104,25 @@ async def run_turn(
             那么你就应该拆成多个任务或者多个步骤,依次交给你的手下,每做完一个任务提交一次
             """
         )
-        await printer.request(
-            tools=[
-                *file_read_tools,
-                *egent.builtin_tools.git_tools.read_only_tools,
-                delegate_develop_workflow,
-                egent.builtin_tools.git_tools.git_add,
-                egent.builtin_tools.git_tools.git_commit,
-            ],
-        )
+        agent.tools = [
+            *file_read_tools,
+            *egent.builtin_tools.git_tools.read_only_tools,
+            delegate_develop_workflow,
+            egent.builtin_tools.git_tools.git_add,
+            egent.builtin_tools.git_tools.git_commit,
+        ]
+        await printer.request()
         agent.add_message("system", "现在进入询问截断,你暂时不可以委派工作")
     else:
         agent.add_message("user", prompt)
-        await printer.request(
-            tools=[
-                *file_read_tools,
-                *egent.builtin_tools.git_tools.read_only_tools,
-                egent.builtin_tools.git_tools.git_add,
-                egent.builtin_tools.git_tools.git_commit,
-                egent.builtin_tools.git_tools.git_push,
-            ],
-        )
+        agent.tools = [
+            *file_read_tools,
+            *egent.builtin_tools.git_tools.read_only_tools,
+            egent.builtin_tools.git_tools.git_add,
+            egent.builtin_tools.git_tools.git_commit,
+            egent.builtin_tools.git_tools.git_push,
+        ]
+        await printer.request()
 
 
 async def async_main() -> int:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from egent.tool import ToolCallable
 import logging
 import pathlib
 import re
@@ -181,15 +180,16 @@ class Agent:
             skills: 技能路径列表，每项为技能目录或 ``SKILL.md`` 路径。
         """
         model_settings = egent.model_settings.ModelSettings.load(settings)
-        self._client = AsyncOpenAI(
+        self.__client = AsyncOpenAI(
             api_key=model_settings.api_key,
             base_url=model_settings.base_url,
         )
         self.model = model_settings.model_name
-        self._messages: list[ChatMessage] = []
-        self._event_listeners: list[Callable[[AgentEvent], None]] = []
+        self.tools: list[egent.tool.ToolCallable] = []
+        self.__messages: list[ChatMessage] = []
+        self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = build_skills(skills)
-        self._skill_tools = (
+        self.__skill_tools = (
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
         )
         if skill_index:
@@ -198,40 +198,36 @@ class Agent:
     def clone(self) -> Agent:
         """复制会话：共享模型配置与技能工具，深拷贝消息历史，不复制事件监听器。"""
         cloned = Agent.__new__(Agent)
-        cloned._client = self._client  # pylint: disable=protected-access
+        cloned.__client = self.__client
         cloned.model = self.model
-        cloned._messages = deepcopy(self._messages)  # pylint: disable=protected-access
-        cloned._event_listeners = []  # pylint: disable=protected-access
-        cloned._skill_tools = self._skill_tools  # pylint: disable=protected-access
+        cloned.tools = list(self.tools)
+        cloned.__messages = deepcopy(self.__messages)
+        cloned.__event_listeners = []
+        cloned.__skill_tools = self.__skill_tools
         return cloned
-
-    @property
-    def messages(self) -> list[ChatMessage]:
-        """返回当前聊天记录的副本。"""
-        return deepcopy(self._messages)
 
     @property
     def last_message(self) -> str:
         """返回最后一条消息的 content 文本。"""
-        content = self._messages[-1].get("content")
+        content = self.__messages[-1].get("content")
         return content if isinstance(content, str) else ""
 
     def add_listener(self, listener: Callable[[AgentEvent], None]) -> None:
         """注册流式事件监听器。"""
-        self._event_listeners.append(listener)
+        self.__event_listeners.append(listener)
 
     def remove_listener(self, listener: Callable[[AgentEvent], None]) -> None:
         """移除流式事件监听器。"""
-        self._event_listeners.remove(listener)
+        self.__event_listeners.remove(listener)
 
     def __emit_event(self, event: AgentEvent) -> None:
-        for listener in self._event_listeners:
+        for listener in self.__event_listeners:
             listener(event)
 
     def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加消息原文，不截断。供框架写入 agent 回复等。"""
         message: ChatMessage = {"role": role, "content": content, **extra}
-        self._messages.append(message)
+        self.__messages.append(message)
         extra_text = f" | extra={extra}" if extra else ""
         _logger.info("[%s %s] %s%s", datetime.now().strftime("%H:%M:%S"), role, content, extra_text)
         return message
@@ -243,17 +239,15 @@ class Agent:
     async def request(
         self,
         *,
-        tools: Iterable[egent.tool.ToolCallable] = (),
         resolved_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> None:
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。
 
         Args:
-            tools: 普通工具函数列表，自动生成 schema；与构造时注册的技能工具自动合并。
             resolved_tools: 已就绪的 (schema, handler) 对，供框架注入
                 无法用普通函数表达的工具（如 submit）。
         """
-        api_tools, tool_handlers = egent.tool.resolve_tools([*self._skill_tools, *tools])
+        api_tools, tool_handlers = egent.tool.resolve_tools([*self.__skill_tools, *self.tools])
         resolved_tools = tuple(resolved_tools)
         api_tools.extend(tool_schema for tool_schema, _ in resolved_tools)
         tool_handlers.update(
@@ -263,9 +257,9 @@ class Agent:
         while True:
             for attempt_index in range(_REQUEST_RETRY_COUNT):
                 try:
-                    async with self._client.chat.completions.stream(
+                    async with self.__client.chat.completions.stream(
                         model=self.model,
-                        messages=self._messages,
+                        messages=self.__messages,
                         tools=api_tools if api_tools else NOT_GIVEN,
                     ) as stream:
                         async for event in stream:
@@ -321,13 +315,11 @@ class Agent:
     async def request_submit(
         self,
         submit_fields: dict[str, tuple[type, str]],
-        tools: Iterable[egent.tool.ToolCallable],
     ) -> dict[str, Any]:
         """循环请求直至 ``submit_task`` 工具被调用，返回提交的参数。
 
         Args:
             submit_fields: submit 参数规格，``字段名 -> (类型, 描述)``。
-            tools: 本步可用的工具函数列表。
 
         Returns:
             agent 提交的参数，key 与 ``submit_fields`` 一致。
@@ -351,11 +343,9 @@ class Agent:
             submitted_arguments = submit_model.model_validate_json(arguments_json).model_dump()
             return "收到"
 
-        tools = tuple[ToolCallable, ...](tools)
         self.__add_message("system", _SUBMIT_REMINDER)
         while submitted_arguments is None:
             await self.request(
-                tools=tools,
                 resolved_tools=((submit_schema, submit_handler),),
             )
             if submitted_arguments is None:
@@ -366,12 +356,12 @@ class Agent:
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""
         system_prefix: list[ChatMessage] = []
-        for message in self._messages:
+        for message in self.__messages:
             if message.get("role") != "system":
                 break
             system_prefix.append(message)
 
-        rest = self._messages[len(system_prefix):]
+        rest = self.__messages[len(system_prefix):]
         if not rest:
             return ""
 
@@ -389,7 +379,7 @@ class Agent:
                 summary_parts.append(f"[{role}]\n{content}")
 
         response = await _run_with_network_retry(
-            lambda: self._client.chat.completions.create(
+            lambda: self.__client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": _SUMMARIZE_SYSTEM},
@@ -398,7 +388,7 @@ class Agent:
             ),
         )
         summary = response.choices[0].message.content or ""
-        self._messages = deepcopy(system_prefix)
+        self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"{_SUMMARY_PREFIX}{summary}")
         return summary
 

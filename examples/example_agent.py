@@ -32,7 +32,7 @@ async def run_turn(
     path_validator = _common.EgentPathValidator()
     file_read_tools = builtin_tools.file_system_tools.get_read_tools(path_validator)
     agent.add_message("user", input(">>> ").strip())
-    await printer.request(tools=[
+    agent.tools = [
         *file_read_tools,
         *builtin_tools.git_tools.read_only_tools,
         builtin_tools.git_tools.git_add,
@@ -40,7 +40,8 @@ async def run_turn(
         _common.reload_modules,
         example_workflow_develop.delegate_develop_workflow,
         example_workflow_todo.todo_digest_workflow,
-    ])
+    ]
+    await printer.request()
 
 
 async def async_main() -> int:

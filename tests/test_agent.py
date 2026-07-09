@@ -31,14 +31,15 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
 
     assert reviewer is not leader
     assert reviewer.model == leader.model
-    assert reviewer._client is leader._client  # pylint: disable=protected-access
-    assert reviewer._skill_tools is leader._skill_tools  # pylint: disable=protected-access
-    assert reviewer.messages == leader.messages
-    assert reviewer._messages is not leader._messages  # pylint: disable=protected-access
-    assert not reviewer._event_listeners  # pylint: disable=protected-access
+    assert reviewer._Agent__client is leader._Agent__client
+    assert reviewer._Agent__skill_tools is leader._Agent__skill_tools
+    assert reviewer.tools == leader.tools
+    assert reviewer._Agent__messages == leader._Agent__messages
+    assert reviewer._Agent__messages is not leader._Agent__messages
+    assert not reviewer._Agent__event_listeners
 
     leader.add_message("assistant", "world")
-    assert leader.messages != reviewer.messages
+    assert leader._Agent__messages != reviewer._Agent__messages
 
 
 @pytest.mark.asyncio

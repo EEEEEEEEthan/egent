@@ -96,9 +96,9 @@ def test_agent_injects_skill_catalog(tmp_path, monkeypatch) -> None:
 
     agent = egent.agent.Agent("test", skills=[skill_dir])
 
-    assert agent.messages[0]["role"] == "system"
-    assert "demo: 演示技能" in agent.messages[0]["content"]
-    api_tools, _handlers = egent.tool.resolve_tools([*agent._skill_tools])  # pylint: disable=protected-access
+    assert agent._Agent__messages[0]["role"] == "system"
+    assert "demo: 演示技能" in agent._Agent__messages[0]["content"]
+    api_tools, _handlers = egent.tool.resolve_tools([*agent._Agent__skill_tools])
     assert {tool["function"]["name"] for tool in api_tools} == {
         "learn_skill",
         "run_skill_script",

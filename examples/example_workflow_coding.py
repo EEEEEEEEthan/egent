@@ -56,13 +56,13 @@ async def coding(
     )
 
     agent.add_message("system", prompt)
+    agent.tools = [
+        *file_read_tools,
+        *write_tools,
+        *egent.builtin_tools.git_tools.read_only_tools,
+    ]
     submitted = await agent.request_submit(
         {"success": (bool, "任务是否完成"), "reason": (str, "放弃任务时说明原因")},
-        (
-            *file_read_tools,
-            *write_tools,
-            *egent.builtin_tools.git_tools.read_only_tools,
-        ),
     )
     if not submitted["success"]:
         raise CodingGaveUp(submitted["reason"])
