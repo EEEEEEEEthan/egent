@@ -189,7 +189,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__tool_schemas_text: str | None = None
         self.__path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None
         self.__path_permissions_text: str | None = None
-        self.__file_tools = self.__build_file_tools()
         skill_index, skill_catalog = build_skills(skills)
         self.__skill_tools = (
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
@@ -208,16 +207,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         value: egent.builtin_tools.path_validator.PathPermissions | None,
     ) -> None:
         self.__path_permissions = value
-
-    def __build_file_tools(self) -> list[egent.tool.ToolCallable]:
-        return list(
-            egent.builtin_tools.file_system_tools.get_file_tools(self.__path_permissions),
-        )
-
-    def __file_tools_state_text(self) -> str:
-        if self.__path_permissions is None:
-            return ""
-        return self.__path_permissions.format_rules()
 
     def __copy__(self) -> Agent:
         cloned = Agent.__new__(Agent)
@@ -260,7 +249,31 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
-        return self.__add_message(role, _truncate_and_save(content, role), **extra)
+        # 以 TOOL_RESULT_MAX_CHARS 作为截断阈值，超出部分保存到 .egent/.temp/ 临时文件。
+        # 原因：工具返回值是一次性的，无其他持久化来源，不保存则 AI 永远无法看到完整内容。
+        if len(content) > egent.limits.TOOL_RESULT_MAX_CHARS:
+            head = content[:egent.limits.TOOL_RESULT_MAX_CHARS]
+            tail = content[egent.limits.TOOL_RESULT_MAX_CHARS:]
+            egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
+            egent_temp_dir.mkdir(parents=True, exist_ok=True)
+            egent.model_settings.ensure_egent_gitignore()
+            file_name = f"{role}-{uuid.uuid4().hex}.txt"
+            (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
+            egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
+            relative_path = f".egent/.temp/{file_name}"
+            file_lines = content.splitlines(keepends=True) or ([content] if content else [])
+            next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
+                file_lines,
+                1,
+                1,
+                egent.limits.TOOL_RESULT_MAX_CHARS,
+            )
+            content = (
+                f"{head}...\n"
+                f"(内容太长被截断,剩余{len(tail)}字符,完整内容保存于{relative_path},"
+                f"请用 line={next_line} column={next_column} 继续读取)"
+            )
+        return self.__add_message(role, content, **extra)
 
     async def request(self) -> None:
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
@@ -272,16 +285,20 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> None:
         extra_tools = tuple[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler], ...](extra_tools)
-        file_tools_state_text = self.__file_tools_state_text()
+        file_tools_state_text = (
+            self.__path_permissions.format_rules()
+            if self.__path_permissions is not None
+            else ""
+        )
         if (
             self.__path_permissions_text is not None
             and file_tools_state_text != self.__path_permissions_text
         ):
             self.__add_message("system", "路径权限已更新")
-        self.__file_tools = self.__build_file_tools()
         self.__path_permissions_text = file_tools_state_text
+        file_tools = egent.builtin_tools.file_system_tools.get_file_tools(self.__path_permissions)
         api_tools, tool_handlers = egent.tool.resolve_tools(
-            [*self.__skill_tools, *self.__file_tools, *self.tools],
+            [*self.__skill_tools, *file_tools, *self.tools],
         )
         api_tools.extend(tool_schema for tool_schema, _ in extra_tools)
         tool_handlers.update(
@@ -432,32 +449,3 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"此前工作摘要:\n{summary}")
         return summary
-
-
-def _truncate_and_save(content: str, prefix: str) -> str:
-    # 以 TOOL_RESULT_MAX_CHARS 作为截断阈值，超出部分保存到 .egent/.temp/ 临时文件。
-    # 原因：工具返回值是一次性的，无其他持久化来源，不保存则 AI 永远无法看到完整内容。
-    if len(content) <= egent.limits.TOOL_RESULT_MAX_CHARS:
-        return content
-
-    head = content[:egent.limits.TOOL_RESULT_MAX_CHARS]
-    tail = content[egent.limits.TOOL_RESULT_MAX_CHARS:]
-    egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
-    egent_temp_dir.mkdir(parents=True, exist_ok=True)
-    egent.model_settings.ensure_egent_gitignore()
-    file_name = f"{prefix}-{uuid.uuid4().hex}.txt"
-    (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
-    relative_path = f".egent/.temp/{file_name}"
-    file_lines = content.splitlines(keepends=True) or ([content] if content else [])
-    next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
-        file_lines,
-        1,
-        1,
-        egent.limits.TOOL_RESULT_MAX_CHARS,
-    )
-    return (
-        f"{head}...\n"
-        f"(内容太长被截断,剩余{len(tail)}字符,完整内容保存于{relative_path},"
-        f"请用 line={next_line} column={next_column} 继续读取)"
-    )

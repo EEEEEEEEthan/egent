@@ -38,7 +38,6 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
     assert reviewer.model == leader.model
     assert reviewer._Agent__client is leader._Agent__client
     assert reviewer._Agent__skill_tools is leader._Agent__skill_tools
-    assert reviewer._Agent__file_tools is leader._Agent__file_tools
     assert reviewer.path_permissions is leader.path_permissions
     assert reviewer.tools == leader.tools
     assert reviewer._Agent__messages == leader._Agent__messages
@@ -117,7 +116,9 @@ def test_agent_includes_builtin_file_tools(monkeypatch, tmp_path) -> None:
     agent = egent.agent.Agent("test")
     agent.path_permissions = permissions
 
-    api_tools, _ = egent.tool.resolve_tools([*agent._Agent__file_tools])
+    api_tools, _ = egent.tool.resolve_tools(
+        [*egent.builtin_tools.file_system_tools.get_file_tools(agent.path_permissions)],
+    )
     tool_names = {tool_schema["function"]["name"] for tool_schema in api_tools}
 
     assert "read_file" in tool_names
