@@ -191,16 +191,17 @@ class Agent:
         if skill_index:
             self.__add_message("system", skill_catalog)
 
-    def clone(self) -> Agent:
-        """复制会话：共享模型配置与技能工具，深拷贝消息历史，不复制事件监听器。"""
+    def __copy__(self) -> Agent:
         cloned = Agent.__new__(Agent)
-        cloned.__client = self.__client
-        cloned.model = self.model
-        cloned.tools = list(self.tools)
-        cloned.__messages = deepcopy(self.__messages)
-        cloned.__event_listeners = []
-        cloned.__skill_tools = self.__skill_tools
-        cloned.__tool_schemas_text = self.__tool_schemas_text
+        state = self.__dict__.copy()
+        for key, value in state.items():
+            if key.endswith("__messages"):
+                state[key] = deepcopy(value)
+            elif key == "tools":
+                state[key] = list(value)
+            elif key.endswith("__event_listeners"):
+                state[key] = []
+        cloned.__dict__.update(state)
         return cloned
 
     @property

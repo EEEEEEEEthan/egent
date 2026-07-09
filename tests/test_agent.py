@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import copy
 from types import SimpleNamespace
 
 import pytest
@@ -27,7 +28,7 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
     leader.add_message("user", "hello")
     leader.add_listener(lambda _event: None)
 
-    reviewer = leader.clone()
+    reviewer = copy(leader)
 
     assert reviewer is not leader
     assert reviewer.model == leader.model
