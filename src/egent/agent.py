@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from egent.tool import ToolCallable
 import logging
 import pathlib
 import re
@@ -17,7 +18,6 @@ import httpx
 import pydantic
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, NOT_GIVEN, RateLimitError
 from openai.lib import pydantic_function_tool
-from openai.types.chat import ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion_tool_union_param import (
     ChatCompletionToolUnionParam,
 )
@@ -240,32 +240,6 @@ class Agent:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
         return self.__add_message(role, _truncate_and_save(content, role), **extra)
 
-    async def __run_tool_call(
-        self,
-        tool_call: ChatCompletionMessageToolCall,
-        tool_handlers: dict[str, egent.tool.ToolHandler],
-    ) -> None:
-        function_name = tool_call.function.name
-        function_arguments = tool_call.function.arguments
-        started = ToolCallStarted(name=function_name, arguments=function_arguments)
-        self.__emit_event(started)
-        try:
-            handler = tool_handlers.get(function_name)
-            if handler is None:
-                raise ValueError(f"工具未注册: {function_name}")
-            handler_result = handler(function_arguments)
-            if isinstance(handler_result, Awaitable):
-                handler_result = await handler_result
-        except Exception as exception:  # pylint: disable=broad-exception-caught
-            handler_result = str(exception)
-        tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
-        executed = ToolCallExecuted(
-            name=function_name,
-            arguments=function_arguments,
-            result=tool_message["content"],
-        )
-        self.__emit_event(executed)
-
     async def request(
         self,
         *,
@@ -325,7 +299,24 @@ class Agent:
                 tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
             )
             for tool_call in tool_calls:
-                await self.__run_tool_call(tool_call, tool_handlers)
+                function_name = tool_call.function.name
+                function_arguments = tool_call.function.arguments
+                self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
+                try:
+                    handler = tool_handlers.get(function_name)
+                    if handler is None:
+                        raise ValueError(f"工具未注册: {function_name}")
+                    handler_result = handler(function_arguments)
+                    if isinstance(handler_result, Awaitable):
+                        handler_result = await handler_result
+                except Exception as exception:  # pylint: disable=broad-exception-caught
+                    handler_result = str(exception)
+                tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
+                self.__emit_event(ToolCallExecuted(
+                    name=function_name,
+                    arguments=function_arguments,
+                    result=tool_message["content"],
+                ))
 
     async def request_submit(
         self,
@@ -360,7 +351,7 @@ class Agent:
             submitted_arguments = submit_model.model_validate_json(arguments_json).model_dump()
             return "收到"
 
-        tools = tuple(tools)
+        tools = tuple[ToolCallable, ...](tools)
         self.__add_message("system", _SUBMIT_REMINDER)
         while submitted_arguments is None:
             await self.request(
