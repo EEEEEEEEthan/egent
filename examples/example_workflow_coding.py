@@ -1,6 +1,6 @@
 """开发编码工作流。
 
-``coding`` 在传入的 ``Conversation`` 上累积上下文，支持多轮修复。
+``coding`` 在传入的 ``Agent`` 上累积上下文，支持多轮修复。
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import _common
 import egent
-import egent.conversation
+import egent.agent
 
 path_validator = _common.EgentPathValidator()
 file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
@@ -27,7 +27,7 @@ class CodingGaveUp(Exception):
 
 
 async def coding(
-    conversation: egent.conversation.Conversation,
+    agent: egent.agent.Agent,
     prompt: str,
     *,
     custom_path_validator: _common.EgentPathValidator | None = None,
@@ -37,7 +37,7 @@ async def coding(
     会话上下文在多次调用间保持连贯。
 
     Args:
-        conversation: 对话上下文。
+        agent: 对话上下文。
         prompt: 开发需求描述。
         custom_path_validator: 可选的自定义路径校验器，用于生成文件写入工具集；
             为 ``None`` 时沿用模块级的 ``file_write_tools``。
@@ -55,8 +55,8 @@ async def coding(
         else file_write_tools
     )
 
-    conversation.add_message("system", prompt)
-    submitted = await conversation.request_submit(
+    agent.add_message("system", prompt)
+    submitted = await agent.request_submit(
         {"success": (bool, "任务是否完成"), "reason": (str, "放弃任务时说明原因")},
         (
             *file_read_tools,
@@ -75,11 +75,11 @@ async def coding(
         check=False,
     )
     if pytest_result.returncode == 0:
-        conversation.add_message("system", "你的测试通过。")
+        agent.add_message("system", "你的测试通过。")
         return True, "测试通过"
 
     failure_output = f"{pytest_result.stdout}\n{pytest_result.stderr}".strip()
-    conversation.add_message(
+    agent.add_message(
         "system",
         f"回归测试失败。请修复:\n\n{failure_output}\n\n请仔细查看需求:\n\n{prompt}",
     )

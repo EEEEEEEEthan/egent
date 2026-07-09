@@ -129,7 +129,7 @@ python examples/example_agent.py
 │   └── example_workflow_review.py
 ├── src/egent/               # 核心库
 │   ├── __init__.py
-│   ├── conversation.py      # 对话管理
+│   ├── agent.py               # Agent 管理
 │   ├── tool.py              # 工具 schema 生成
 │   ├── model_settings.py    # 模型配置加载
 │   ├── limits.py            # 限制常量

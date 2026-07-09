@@ -13,7 +13,7 @@ import conversation_printer
 import example_workflow_coding
 import example_workflow_review
 import egent
-import egent.conversation
+import egent.agent
 
 path_validator = _common.EgentPathValidator()
 file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
@@ -36,7 +36,7 @@ async def begin_develop_workflow(
     Returns:
         (success, summary): success 为 True 表示验收通过。
     """
-    ethan = egent.conversation.Conversation("gpt5-flash")
+    ethan = egent.agent.Agent("gpt5-flash")
     printer = conversation_printer.ConversationPrinter(ethan)
     ethan.add_message("system", "你是ethan，是这个项目的开发工程师")
     ethan.add_message(
@@ -90,13 +90,13 @@ async def delegate_develop_workflow(description: str) -> str:
 
 
 async def run_turn(
-    conversation: egent.conversation.Conversation,
+    agent: egent.agent.Agent,
     printer: conversation_printer.ConversationPrinter,
 ) -> None:
     """运行一轮交互：收集用户输入并发送请求。"""
     prompt = input(">>> ").strip()
     if prompt == "/doit":
-        conversation.add_message(
+        agent.add_message(
             "user",
             """
             开始做吧! 你把任务交给你的手下。
@@ -113,9 +113,9 @@ async def run_turn(
                 egent.builtin_tools.git_tools.git_commit,
             ],
         )
-        conversation.add_message("system", "现在进入询问截断,你暂时不可以委派工作")
+        agent.add_message("system", "现在进入询问截断,你暂时不可以委派工作")
     else:
-        conversation.add_message("user", prompt)
+        agent.add_message("user", prompt)
         await printer.request(
             tools=[
                 *file_read_tools,
@@ -129,17 +129,17 @@ async def run_turn(
 
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
-    conversation = egent.conversation.Conversation("gpt5", skills=(".agents/skills/build-workflow",))
-    conversation.add_message(
+    agent = egent.agent.Agent("gpt5", skills=(".agents/skills/build-workflow",))
+    agent.add_message(
         "system",
         """你时egent.你是这个agent项目的主管,同时,你就是这个项目驱动的agent.
         和你对接的人是产品经理.你可能需要根据项目的实际情况揣测他背后的真实需求.你需要整理一份大致的计划.计划不要超过10行,每行不要超过160字.
         在产品经理觉得这份计划ok的时候,会给你新的工具,这时候你就可以开始分配任务了
         """,
     )
-    printer = conversation_printer.ConversationPrinter(conversation)
+    printer = conversation_printer.ConversationPrinter(agent)
     while True:
-        await run_turn(conversation, printer)
+        await run_turn(agent, printer)
 
 
 if __name__ == "__main__":

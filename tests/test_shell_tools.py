@@ -85,7 +85,7 @@ def test_shell_times_out() -> None:
 
 
 def test_shell_returns_full_output() -> None:
-    """shell 应返回完整输出（截断交由 conversation 统一处理）。"""
+    """shell 应返回完整输出（截断交由 agent 统一处理）。"""
     character_count = egent.limits.TOOL_RESULT_MAX_CHARS + 100
 
     result = egent.builtin_tools.shell_tools.shell(_long_output_command(character_count))

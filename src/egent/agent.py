@@ -1,4 +1,4 @@
-"""Chat Completions 多轮对话封装。"""
+"""Chat Completions Agent 封装。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 import pathlib
 import re
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
@@ -129,19 +129,19 @@ async def _run_with_network_retry(operation: Callable[[], Awaitable[_Result]]) -
 
 
 @dataclass(frozen=True)
-class ConversationEvent:
-    """Conversation 流式事件基类。"""
+class AgentEvent:
+    """Agent 流式事件基类。"""
 
 
 @dataclass(frozen=True)
-class TextDelta(ConversationEvent):
+class TextDelta(AgentEvent):
     """LLM 输出的文本增量。"""
 
     text: str
 
 
 @dataclass(frozen=True)
-class ToolCallStarted(ConversationEvent):
+class ToolCallStarted(AgentEvent):
     """工具调用即将执行。"""
 
     name: str
@@ -149,7 +149,7 @@ class ToolCallStarted(ConversationEvent):
 
 
 @dataclass(frozen=True)
-class ToolCallExecuted(ConversationEvent):
+class ToolCallExecuted(AgentEvent):
     """工具调用已执行并写回结果。"""
 
     name: str
@@ -158,14 +158,14 @@ class ToolCallExecuted(ConversationEvent):
 
 
 @dataclass(frozen=True)
-class TurnCompleted(ConversationEvent):
+class TurnCompleted(AgentEvent):
     """单轮对话结束，携带完整回复文本。"""
 
     text: str
 
 
 
-class Conversation:
+class Agent:
     """维护 messages 历史并调用 Chat Completions API。"""
 
     def __init__(
@@ -187,7 +187,7 @@ class Conversation:
         )
         self.model = model_settings.model_name
         self._messages: list[ChatMessage] = []
-        self._event_listeners: list[Callable[[ConversationEvent], None]] = []
+        self._event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = build_skills(skills)
         self._skill_tools = (
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
@@ -195,14 +195,14 @@ class Conversation:
         if skill_index:
             self.__add_message("system", skill_catalog)
 
-    def clone(self) -> Conversation:
+    def clone(self) -> Agent:
         """复制会话：共享模型配置与技能工具，深拷贝消息历史，不复制事件监听器。"""
-        cloned = Conversation.__new__(Conversation)
-        cloned._client = self._client
+        cloned = Agent.__new__(Agent)
+        cloned._client = self._client  # pylint: disable=protected-access
         cloned.model = self.model
-        cloned._messages = deepcopy(self._messages)
-        cloned._event_listeners = []
-        cloned._skill_tools = self._skill_tools
+        cloned._messages = deepcopy(self._messages)  # pylint: disable=protected-access
+        cloned._event_listeners = []  # pylint: disable=protected-access
+        cloned._skill_tools = self._skill_tools  # pylint: disable=protected-access
         return cloned
 
     @property
@@ -216,15 +216,15 @@ class Conversation:
         content = self._messages[-1].get("content")
         return content if isinstance(content, str) else ""
 
-    def on_event(self, listener: Callable[[ConversationEvent], None]) -> None:
+    def add_listener(self, listener: Callable[[AgentEvent], None]) -> None:
         """注册流式事件监听器。"""
         self._event_listeners.append(listener)
 
-    def off_event(self, listener: Callable[[ConversationEvent], None]) -> None:
+    def remove_listener(self, listener: Callable[[AgentEvent], None]) -> None:
         """移除流式事件监听器。"""
         self._event_listeners.remove(listener)
 
-    def __emit_event(self, event: ConversationEvent) -> None:
+    def __emit_event(self, event: AgentEvent) -> None:
         for listener in self._event_listeners:
             listener(event)
 
@@ -244,12 +244,11 @@ class Conversation:
         self,
         tool_call: ChatCompletionMessageToolCall,
         tool_handlers: dict[str, egent.tool.ToolHandler],
-    ) -> AsyncIterator[ConversationEvent]:
+    ) -> None:
         function_name = tool_call.function.name
         function_arguments = tool_call.function.arguments
         started = ToolCallStarted(name=function_name, arguments=function_arguments)
         self.__emit_event(started)
-        yield started
         try:
             handler = tool_handlers.get(function_name)
             if handler is None:
@@ -266,65 +265,14 @@ class Conversation:
             result=tool_message["content"],
         )
         self.__emit_event(executed)
-        yield executed
-
-    async def __request_turn(
-        self,
-        api_tools: list[ChatCompletionToolUnionParam],
-        tool_handlers: dict[str, egent.tool.ToolHandler],
-    ) -> AsyncIterator[ConversationEvent]:
-        for attempt_index in range(_REQUEST_RETRY_COUNT):
-            try:
-                async with self._client.chat.completions.stream(
-                    model=self.model,
-                    messages=self._messages,
-                    tools=api_tools if api_tools else NOT_GIVEN,
-                ) as stream:
-                    async for event in stream:
-                        if event.type == "content.delta":
-                            text_delta = TextDelta(event.delta)
-                            self.__emit_event(text_delta)
-                            yield text_delta
-                    completion = await stream.get_final_completion()
-                break
-            except _RETRYABLE_NETWORK_EXCEPTIONS as error:
-                if isinstance(error, APIStatusError) and error.status_code < 500:
-                    raise
-                if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
-                    raise
-                _logger.warning(
-                    "网络请求失败，%.0fs 后重试 (%d/%d): %s",
-                    _REQUEST_RETRY_DELAY_SECONDS,
-                    attempt_index + 1,
-                    _REQUEST_RETRY_COUNT,
-                    error,
-                )
-                await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
-        message = completion.choices[0].message
-        reply_text = message.content or ""
-        tool_calls = message.tool_calls or []
-        if not tool_calls:
-            self.__add_message("assistant", reply_text)
-            turn_completed = TurnCompleted(reply_text)
-            self.__emit_event(turn_completed)
-            yield turn_completed
-            return
-        self.__add_message(
-            "assistant",
-            reply_text,
-            tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
-        )
-        for tool_call in tool_calls:
-            async for tool_event in self.__run_tool_call(tool_call, tool_handlers):
-                yield tool_event
 
     async def request(
         self,
         *,
         tools: Iterable[egent.tool.ToolCallable] = (),
         resolved_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
-    ) -> AsyncIterator[ConversationEvent]:
-        """根据当前历史流式请求助手回复，必要时自动执行工具并续聊。
+    ) -> None:
+        """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。
 
         Args:
             tools: 普通工具函数列表，自动生成 schema；与构造时注册的技能工具自动合并。
@@ -339,10 +287,45 @@ class Conversation:
         )
 
         while True:
-            async for event in self.__request_turn(api_tools, tool_handlers):
-                yield event
-                if isinstance(event, TurnCompleted):
-                    return
+            for attempt_index in range(_REQUEST_RETRY_COUNT):
+                try:
+                    async with self._client.chat.completions.stream(
+                        model=self.model,
+                        messages=self._messages,
+                        tools=api_tools if api_tools else NOT_GIVEN,
+                    ) as stream:
+                        async for event in stream:
+                            if event.type == "content.delta":
+                                self.__emit_event(TextDelta(event.delta))
+                        completion = await stream.get_final_completion()
+                    break
+                except _RETRYABLE_NETWORK_EXCEPTIONS as error:
+                    if isinstance(error, APIStatusError) and error.status_code < 500:
+                        raise
+                    if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
+                        raise
+                    _logger.warning(
+                        "网络请求失败，%.0fs 后重试 (%d/%d): %s",
+                        _REQUEST_RETRY_DELAY_SECONDS,
+                        attempt_index + 1,
+                        _REQUEST_RETRY_COUNT,
+                        error,
+                    )
+                    await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
+            message = completion.choices[0].message
+            reply_text = message.content or ""
+            tool_calls = message.tool_calls or []
+            if not tool_calls:
+                self.__add_message("assistant", reply_text)
+                self.__emit_event(TurnCompleted(reply_text))
+                return
+            self.__add_message(
+                "assistant",
+                reply_text,
+                tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
+            )
+            for tool_call in tool_calls:
+                await self.__run_tool_call(tool_call, tool_handlers)
 
     async def request_submit(
         self,
@@ -380,11 +363,10 @@ class Conversation:
         tools = tuple(tools)
         self.__add_message("system", _SUBMIT_REMINDER)
         while submitted_arguments is None:
-            async for _event in self.request(
+            await self.request(
                 tools=tools,
                 resolved_tools=((submit_schema, submit_handler),),
-            ):
-                pass
+            )
             if submitted_arguments is None:
                 self.__add_message("system", _SUBMIT_REMINDER)
 

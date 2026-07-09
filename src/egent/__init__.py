@@ -1,9 +1,9 @@
 """egent 包。"""
 
-import egent.conversation
+import egent.agent
 from . import builtin_tools
 
 __all__ = [
-    "conversation",
+    "agent",
     "builtin_tools",
 ]

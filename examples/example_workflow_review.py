@@ -8,7 +8,7 @@ from __future__ import annotations
 import _common
 import conversation_printer
 import egent
-import egent.conversation
+import egent.agent
 
 path_validator = _common.EgentPathValidator()
 file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
@@ -20,7 +20,7 @@ async def review(prompt: str) -> tuple[bool, str]:
     Returns:
         (passed, message): 是否通过验收，及验收意见摘要。
     """
-    reviewer = egent.conversation.Conversation("gpt5")
+    reviewer = egent.agent.Agent("gpt5")
     conversation_printer.ConversationPrinter(reviewer)
     reviewer.add_message(
         "system",
