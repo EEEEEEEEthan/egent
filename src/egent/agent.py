@@ -279,7 +279,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         await self.__request()
 
-    async def __request(  # pylint: disable=too-many-locals,too-many-branches
+    async def __request(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self,
         *,
         extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
