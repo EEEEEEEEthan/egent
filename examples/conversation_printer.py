@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import Any
 
 import egent.agent
-import egent.tool
 
 
 class ConversationPrinter:
@@ -31,13 +29,9 @@ class ConversationPrinter:
     ) -> None:
         self.close()
 
-    async def request(
-        self,
-        *,
-        resolved_tools: tuple[tuple[Any, egent.tool.ToolHandler], ...] = (),
-    ) -> None:
+    async def request(self) -> None:
         """执行一轮请求并打印流式输出。"""
-        await self._agent.request(resolved_tools=resolved_tools)
+        await self._agent.request()
 
     def __handle_event(self, event: egent.agent.AgentEvent) -> None:
         if isinstance(event, egent.agent.TextDelta):

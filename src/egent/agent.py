@@ -236,22 +236,20 @@ class Agent:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
         return self.__add_message(role, _truncate_and_save(content, role), **extra)
 
-    async def request(
+    async def request(self) -> None:
+        """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
+        await self.__request()
+
+    async def __request(
         self,
         *,
-        resolved_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
+        extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> None:
-        """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。
-
-        Args:
-            resolved_tools: 已就绪的 (schema, handler) 对，供框架注入
-                无法用普通函数表达的工具（如 submit）。
-        """
         api_tools, tool_handlers = egent.tool.resolve_tools([*self.__skill_tools, *self.tools])
-        resolved_tools = tuple(resolved_tools)
-        api_tools.extend(tool_schema for tool_schema, _ in resolved_tools)
+        extra_tools = tuple(extra_tools)
+        api_tools.extend(tool_schema for tool_schema, _ in extra_tools)
         tool_handlers.update(
-            {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in resolved_tools}
+            {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in extra_tools}
         )
 
         while True:
@@ -345,9 +343,7 @@ class Agent:
 
         self.__add_message("system", _SUBMIT_REMINDER)
         while submitted_arguments is None:
-            await self.request(
-                resolved_tools=((submit_schema, submit_handler),),
-            )
+            await self.__request(extra_tools=((submit_schema, submit_handler),))
             if submitted_arguments is None:
                 self.__add_message("system", _SUBMIT_REMINDER)
 
