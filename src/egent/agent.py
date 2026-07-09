@@ -198,7 +198,7 @@ class Agent:
             if key.endswith("__messages"):
                 state[key] = deepcopy(value)
             elif key == "tools":
-                state[key] = list(value)
+                state[key] = list[Any](value)
             elif key.endswith("__event_listeners"):
                 state[key] = []
         cloned.__dict__.update(state)
@@ -238,7 +238,7 @@ class Agent:
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         await self.__request()
 
-    async def __request(
+    async def __request(  # pylint: disable=too-many-locals
         self,
         *,
         extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
