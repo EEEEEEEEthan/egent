@@ -14,6 +14,7 @@ def _touch_file(path: Path, modified_timestamp: float) -> None:
 
 
 def test_prune_keeps_newest_files(tmp_path: Path) -> None:
+    """超出上限时应保留修改时间最新的文件。"""
     directory = tmp_path / "temp"
     directory.mkdir()
     for index in range(5):
@@ -26,6 +27,7 @@ def test_prune_keeps_newest_files(tmp_path: Path) -> None:
 
 
 def test_prune_ignores_subdirectories(tmp_path: Path) -> None:
+    """清理时不应删除子目录，也不应把目录计入文件数。"""
     directory = tmp_path / "temp"
     directory.mkdir()
     (directory / "nested").mkdir()
@@ -39,6 +41,7 @@ def test_prune_ignores_subdirectories(tmp_path: Path) -> None:
 
 
 def test_prune_noop_when_within_limit(tmp_path: Path) -> None:
+    """文件数未超限时不应删除任何文件。"""
     directory = tmp_path / "temp"
     directory.mkdir()
     _touch_file(directory / "only.txt", 1_000.0)
@@ -49,4 +52,5 @@ def test_prune_noop_when_within_limit(tmp_path: Path) -> None:
 
 
 def test_prune_noop_for_missing_directory(tmp_path: Path) -> None:
+    """目录不存在时应静默返回。"""
     egent.ephemeral_dirs.prune_oldest_files_in_directory(tmp_path / "missing")

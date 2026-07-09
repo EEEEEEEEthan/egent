@@ -1,5 +1,7 @@
 """agent 单元测试。"""
 
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 from copy import copy
