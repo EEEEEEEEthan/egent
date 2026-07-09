@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 
 import egent.builtin_tools.path_validator
 
@@ -24,13 +23,9 @@ _DISCOVERABLE_BLACKLIST_PATTERNS: tuple[str, ...] = (
 _READABLE_BLACKLIST_PATTERNS: tuple[str, ...] = _SENSITIVE_PATTERNS
 
 
-def create_egent_path_permissions(
-    root: Path | None = None,
-) -> egent.builtin_tools.path_validator.PathPermissions:
-    """示例用路径权限：root 内可发现，敏感文件禁读写，噪声路径不可发现。"""
-    scope_root = (root or Path.cwd()).resolve()
+def create_egent_path_permissions() -> egent.builtin_tools.path_validator.PathPermissions:
+    """示例用路径权限：工作目录内可发现，敏感文件禁读写，噪声路径不可发现。"""
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=scope_root,
         discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=("**",),
             blacklist=_DISCOVERABLE_BLACKLIST_PATTERNS,
@@ -46,11 +41,9 @@ def create_egent_path_permissions(
     )
 
 
-def create_read_only_egent_path_permissions(
-    root: Path | None = None,
-) -> egent.builtin_tools.path_validator.PathPermissions:
+def create_read_only_egent_path_permissions() -> egent.builtin_tools.path_validator.PathPermissions:
     """示例用只读路径权限：可发现可读，全部路径不可编辑。"""
-    base = create_egent_path_permissions(root)
+    base = create_egent_path_permissions()
     return dataclasses.replace(
         base,
         editable=egent.builtin_tools.path_validator.PathPermissionRule(

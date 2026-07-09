@@ -10,10 +10,9 @@ import egent.limits
 
 
 def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    root = root.resolve()
-    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",))
+    root_glob = f"{root.resolve().as_posix()}/**"
+    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=(root_glob,))
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=root,
         discoverable=allow_all,
         readable=allow_all,
         editable=allow_all,
@@ -25,17 +24,21 @@ def _reject_path_prefix(
     pattern: str,
 ) -> egent.builtin_tools.path_validator.PathPermissions:
     base = _under_root(root)
+    scoped_pattern = (
+        pattern
+        if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern)
+        else f"{root.resolve().as_posix()}/{pattern}"
+    )
 
     def with_blacklist(
         rule: egent.builtin_tools.path_validator.PathPermissionRule,
     ) -> egent.builtin_tools.path_validator.PathPermissionRule:
         return egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=rule.whitelist,
-            blacklist=rule.blacklist + (pattern,),
+            blacklist=rule.blacklist + (scoped_pattern,),
         )
 
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=base.root,
         discoverable=with_blacklist(base.discoverable),
         readable=with_blacklist(base.readable),
         editable=with_blacklist(base.editable),
@@ -196,7 +199,6 @@ def _reject_discoverable_only(
         )
 
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=base.root,
         discoverable=with_blacklist(base.discoverable),
         readable=base.readable,
         editable=base.editable,

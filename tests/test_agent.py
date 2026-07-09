@@ -108,10 +108,15 @@ def test_agent_includes_builtin_file_tools(monkeypatch, tmp_path) -> None:
     )
 
     permissions = egent.builtin_tools.path_validator.PathPermissions(
-        root=tmp_path,
-        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",)),
-        readable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",)),
-        editable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",)),
+        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(f"{tmp_path.resolve().as_posix()}/**",),
+        ),
+        readable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(f"{tmp_path.resolve().as_posix()}/**",),
+        ),
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(f"{tmp_path.resolve().as_posix()}/**",),
+        ),
     )
     agent = egent.agent.Agent("test")
     agent.path_permissions = permissions
@@ -138,14 +143,22 @@ async def test_request_notifies_path_permissions_change(monkeypatch, tmp_path) -
     )
 
     def make_permissions(blacklist: tuple[str, ...]) -> egent.builtin_tools.path_validator.PathPermissions:
+        scope_glob = f"{tmp_path.resolve().as_posix()}/**"
+        scoped_blacklist = tuple(
+            f"{tmp_path.resolve().as_posix()}/{pattern}"
+            for pattern in blacklist
+        )
         return egent.builtin_tools.path_validator.PathPermissions(
-            root=tmp_path,
-            discoverable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",)),
-            readable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("**",),
-                blacklist=blacklist,
+            discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
+                whitelist=(scope_glob,),
             ),
-            editable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",)),
+            readable=egent.builtin_tools.path_validator.PathPermissionRule(
+                whitelist=(scope_glob,),
+                blacklist=scoped_blacklist,
+            ),
+            editable=egent.builtin_tools.path_validator.PathPermissionRule(
+                whitelist=(scope_glob,),
+            ),
         )
 
     agent = egent.agent.Agent("test")

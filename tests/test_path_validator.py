@@ -7,8 +7,19 @@ from pathlib import Path
 import egent.builtin_tools.path_validator
 
 
+def _scope_pattern(scope: Path, pattern: str) -> str:
+    if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern):
+        return pattern
+    scope_posix = scope.resolve().as_posix()
+    return f"{scope_posix}/{pattern}"
+
+
+def _scope_patterns(scope: Path, patterns: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_scope_pattern(scope, pattern) for pattern in patterns)
+
+
 def _permissions(
-    root: Path,
+    scope: Path,
     **overrides: tuple[str, ...],
 ) -> egent.builtin_tools.path_validator.PathPermissions:
     defaults = {
@@ -21,18 +32,17 @@ def _permissions(
     }
     values = {**defaults, **overrides}
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=root.resolve(),
         discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=values["discoverable_whitelist"],
-            blacklist=values["discoverable_blacklist"],
+            whitelist=_scope_patterns(scope, values["discoverable_whitelist"]),
+            blacklist=_scope_patterns(scope, values["discoverable_blacklist"]),
         ),
         readable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=values["readable_whitelist"],
-            blacklist=values["readable_blacklist"],
+            whitelist=_scope_patterns(scope, values["readable_whitelist"]),
+            blacklist=_scope_patterns(scope, values["readable_blacklist"]),
         ),
         editable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=values["editable_whitelist"],
-            blacklist=values["editable_blacklist"],
+            whitelist=_scope_patterns(scope, values["editable_whitelist"]),
+            blacklist=_scope_patterns(scope, values["editable_blacklist"]),
         ),
     )
 
@@ -91,18 +101,62 @@ def test_is_searchable_requires_both_permissions(tmp_path: Path) -> None:
     assert not permissions.is_searchable(sample_file)
 
 
-def test_outside_root_has_no_permissions(tmp_path: Path) -> None:
-    """root 外的路径应无任何权限。"""
-    outside_root = tmp_path / "outside"
-    outside_root.mkdir()
-    outside_file = outside_root / "sample.txt"
+def test_outside_whitelist_has_no_permissions(tmp_path: Path) -> None:
+    """未命中白名单的路径应无任何权限。"""
+    scope_directory = tmp_path / "scope"
+    scope_directory.mkdir()
+    outside_directory = tmp_path / "outside"
+    outside_directory.mkdir()
+    outside_file = outside_directory / "sample.txt"
     outside_file.write_text("content", encoding="utf-8")
-    permissions = _permissions(tmp_path / "scope")
+    permissions = _permissions(scope_directory)
 
     assert not permissions.is_discoverable(outside_file)
     assert not permissions.is_readable(outside_file)
     assert not permissions.is_editable(outside_file)
     assert not permissions.is_searchable(outside_file)
+
+
+def test_absolute_patterns_allow_multiple_directories(tmp_path: Path) -> None:
+    """绝对路径白名单应支持多个互不相关的目录。"""
+    first_directory = tmp_path / "project_a"
+    second_directory = tmp_path / "project_b"
+    first_directory.mkdir()
+    second_directory.mkdir()
+    first_file = first_directory / "one.txt"
+    second_file = second_directory / "two.txt"
+    first_file.write_text("one", encoding="utf-8")
+    second_file.write_text("two", encoding="utf-8")
+    outside_file = tmp_path / "outside.txt"
+    outside_file.write_text("outside", encoding="utf-8")
+    permissions = egent.builtin_tools.path_validator.PathPermissions(
+        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=()),
+        readable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(
+                f"{first_directory.resolve().as_posix()}/**",
+                f"{second_directory.resolve().as_posix()}/**",
+            ),
+        ),
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=()),
+    )
+
+    assert permissions.is_readable(first_file)
+    assert permissions.is_readable(second_file)
+    assert not permissions.is_readable(outside_file)
+
+
+def test_relative_patterns_match_cwd(tmp_path: Path, monkeypatch) -> None:
+    """相对路径白名单应匹配相对当前工作目录的路径。"""
+    monkeypatch.chdir(tmp_path)
+    sample_file = tmp_path / "sample.txt"
+    sample_file.write_text("content", encoding="utf-8")
+    permissions = egent.builtin_tools.path_validator.PathPermissions(
+        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=()),
+        readable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",)),
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(whitelist=()),
+    )
+
+    assert permissions.is_readable(sample_file)
 
 
 def test_format_rules_includes_all_permissions(tmp_path: Path) -> None:

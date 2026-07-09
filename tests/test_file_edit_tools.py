@@ -9,10 +9,9 @@ import egent.builtin_tools.path_validator
 
 
 def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    root = root.resolve()
-    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",))
+    root_glob = f"{root.resolve().as_posix()}/**"
+    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=(root_glob,))
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=root,
         discoverable=allow_all,
         readable=allow_all,
         editable=allow_all,
@@ -20,15 +19,9 @@ def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathPermission
 
 
 def _under_roots(*roots: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    resolved_roots = [root.resolve() for root in roots]
-    parent = resolved_roots[0].parent
-    whitelist = tuple(
-        f"{root.relative_to(parent).as_posix()}/**"
-        for root in resolved_roots
-    )
+    whitelist = tuple(f"{root.resolve().as_posix()}/**" for root in roots)
     rule = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=whitelist)
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=parent,
         discoverable=rule,
         readable=rule,
         editable=rule,
@@ -40,17 +33,21 @@ def _reject_path_prefix(
     pattern: str,
 ) -> egent.builtin_tools.path_validator.PathPermissions:
     base = _under_root(root)
+    scoped_pattern = (
+        pattern
+        if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern)
+        else f"{root.resolve().as_posix()}/{pattern}"
+    )
 
     def with_blacklist(
         rule: egent.builtin_tools.path_validator.PathPermissionRule,
     ) -> egent.builtin_tools.path_validator.PathPermissionRule:
         return egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=rule.whitelist,
-            blacklist=rule.blacklist + (pattern,),
+            blacklist=rule.blacklist + (scoped_pattern,),
         )
 
     return egent.builtin_tools.path_validator.PathPermissions(
-        root=base.root,
         discoverable=with_blacklist(base.discoverable),
         readable=with_blacklist(base.readable),
         editable=with_blacklist(base.editable),
