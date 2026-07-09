@@ -23,10 +23,10 @@ from openai.types.chat.chat_completion_tool_union_param import (
 )
 
 import egent._line_position
+import egent.builtin_tools.skill_tools
 import egent.ephemeral_dirs
 import egent.limits
 import egent.model_settings
-import egent.builtin_tools.skill_tools
 import egent.tool
 
 ChatRole = Literal["system", "user", "assistant", "tool"]
@@ -243,7 +243,7 @@ class Agent:
         extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> None:
         api_tools, tool_handlers = egent.tool.resolve_tools([*self.__skill_tools, *self.tools])
-        extra_tools = tuple(extra_tools)
+        extra_tools = tuple[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler], ...](extra_tools)
         api_tools.extend(tool_schema for tool_schema, _ in extra_tools)
         tool_handlers.update(
             {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in extra_tools}
