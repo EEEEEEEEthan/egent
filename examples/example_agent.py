@@ -26,14 +26,11 @@ async def run_turn(
 ) -> None:
     """运行一轮交互：收集用户输入并发送请求。
 
-    每次 turn 重新构建工具列表、路径校验器和文件读取工具，
-    使 ``reload_modules`` 后下一轮可以拿到更新后的工具函数。
+    每次 turn 重新设置路径权限，使 ``reload_modules`` 后下一轮可以拿到更新后的规则。
     """
-    path_validator = _common.EgentPathValidator()
-    file_read_tools = builtin_tools.file_system_tools.get_read_tools(path_validator)
+    agent.path_permissions = _common.create_egent_path_permissions()
     agent.add_message("user", input(">>> ").strip())
     agent.tools = [
-        *file_read_tools,
         *builtin_tools.git_tools.read_only_tools,
         builtin_tools.git_tools.git_add,
         builtin_tools.git_tools.git_commit,
@@ -46,7 +43,11 @@ async def run_turn(
 
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
-    agent = Agent("gpt5", skills=[_EXAMPLE_GREET_SKILL])
+    agent = Agent(
+        "gpt5",
+        skills=[_EXAMPLE_GREET_SKILL],
+    )
+    agent.path_permissions = _common.create_egent_path_permissions()
     agent.add_message(
         "system",
         """你时egent.你是这个agent项目的主管,同时,你就是这个项目驱动的agent.

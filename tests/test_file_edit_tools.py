@@ -2,107 +2,59 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from typing import override
+from pathlib import Path
 
 import egent.builtin_tools.file_system_tools
 import egent.builtin_tools.path_validator
 
 
-def _matches_pattern(relative_text: str, pattern: str) -> bool:
-    path_segments = PurePosixPath(relative_text).parts
-    for segment_count in range(1, len(path_segments) + 1):
-        path_prefix = PurePosixPath(*path_segments[:segment_count])
-        if path_prefix.full_match(pattern):
-            return True
-    return False
+def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
+    root = root.resolve()
+    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",))
+    return egent.builtin_tools.path_validator.PathPermissions(
+        root=root,
+        discoverable=allow_all,
+        readable=allow_all,
+        editable=allow_all,
+    )
 
 
-class _UnderRootValidator(egent.builtin_tools.path_validator.PathValidator):
-    def __init__(self, root: Path) -> None:
-        self._root = root.resolve()
-
-    @override
-    def _is_discoverable(self, path: Path) -> bool:
-        return path.resolve().is_relative_to(self._root)
-
-    @override
-    def _is_readable(self, path: Path) -> bool:
-        return path.resolve().is_relative_to(self._root)
-
-    @override
-    def _is_editable(self, path: Path) -> bool:
-        return path.resolve().is_relative_to(self._root)
-
-    @override
-    def _is_searchable(self, path: Path) -> bool:
-        return path.resolve().is_relative_to(self._root)
+def _under_roots(*roots: Path) -> egent.builtin_tools.path_validator.PathPermissions:
+    resolved_roots = [root.resolve() for root in roots]
+    parent = resolved_roots[0].parent
+    whitelist = tuple(
+        f"{root.relative_to(parent).as_posix()}/**"
+        for root in resolved_roots
+    )
+    rule = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=whitelist)
+    return egent.builtin_tools.path_validator.PathPermissions(
+        root=parent,
+        discoverable=rule,
+        readable=rule,
+        editable=rule,
+    )
 
 
-class _UnderRootsValidator(egent.builtin_tools.path_validator.PathValidator):
-    def __init__(self, *roots: Path) -> None:
-        self._roots = tuple(root.resolve() for root in roots)
+def _reject_path_prefix(
+    root: Path,
+    pattern: str,
+) -> egent.builtin_tools.path_validator.PathPermissions:
+    base = _under_root(root)
 
-    def __under_roots(self, path: Path) -> bool:
-        resolved_path = path.resolve()
-        return any(resolved_path.is_relative_to(root) for root in self._roots)
+    def with_blacklist(
+        rule: egent.builtin_tools.path_validator.PathPermissionRule,
+    ) -> egent.builtin_tools.path_validator.PathPermissionRule:
+        return egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=rule.whitelist,
+            blacklist=rule.blacklist + (pattern,),
+        )
 
-    @override
-    def _is_discoverable(self, path: Path) -> bool:
-        return self.__under_roots(path)
-
-    @override
-    def _is_readable(self, path: Path) -> bool:
-        return self.__under_roots(path)
-
-    @override
-    def _is_editable(self, path: Path) -> bool:
-        return self.__under_roots(path)
-
-    @override
-    def _is_searchable(self, path: Path) -> bool:
-        return self.__under_roots(path)
-
-
-class _RejectPathPrefixValidator(_UnderRootValidator):
-    def __init__(self, root: Path, pattern: str) -> None:
-        super().__init__(root)
-        self._pattern = pattern
-
-    def __is_path_ignored(self, path: Path) -> bool:
-        try:
-            relative_text = path.resolve().relative_to(self._root).as_posix()
-        except ValueError:
-            return True
-        return _matches_pattern(relative_text, self._pattern)
-
-    @override
-    def _is_discoverable(self, path: Path) -> bool:
-        return not self.__is_path_ignored(path) and super()._is_discoverable(path)
-
-    @override
-    def _is_readable(self, path: Path) -> bool:
-        return not self.__is_path_ignored(path) and super()._is_readable(path)
-
-    @override
-    def _is_editable(self, path: Path) -> bool:
-        return not self.__is_path_ignored(path) and super()._is_editable(path)
-
-    @override
-    def _is_searchable(self, path: Path) -> bool:
-        return not self.__is_path_ignored(path) and super()._is_searchable(path)
-
-
-def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathValidator:
-    return _UnderRootValidator(root)
-
-
-def _under_roots(*roots: Path) -> egent.builtin_tools.path_validator.PathValidator:
-    return _UnderRootsValidator(*roots)
-
-
-def _reject_path_prefix(root: Path, pattern: str) -> egent.builtin_tools.path_validator.PathValidator:
-    return _RejectPathPrefixValidator(root, pattern)
+    return egent.builtin_tools.path_validator.PathPermissions(
+        root=base.root,
+        discoverable=with_blacklist(base.discoverable),
+        readable=with_blacklist(base.readable),
+        editable=with_blacklist(base.editable),
+    )
 
 
 def test_create_file_writes_content(tmp_path: Path) -> None:

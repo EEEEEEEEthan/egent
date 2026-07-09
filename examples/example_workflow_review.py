@@ -10,9 +10,6 @@ import conversation_printer
 import egent
 import egent.agent
 
-path_validator = _common.EgentPathValidator()
-file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
-
 
 async def review(prompt: str) -> tuple[bool, str]:
     """验收开发成果是否满足需求。
@@ -21,6 +18,7 @@ async def review(prompt: str) -> tuple[bool, str]:
         (passed, message): 是否通过验收，及验收意见摘要。
     """
     reviewer = egent.agent.Agent("gpt5")
+    reviewer.path_permissions = _common.create_read_only_egent_path_permissions()
     conversation_printer.ConversationPrinter(reviewer)
     reviewer.add_message(
         "system",
@@ -43,7 +41,7 @@ async def review(prompt: str) -> tuple[bool, str]:
         "4. 对照需求逐一核对是否满足\n"
         "5. 使用 submit_task 提交验收结果",
     )
-    reviewer.tools = (*file_read_tools, *egent.builtin_tools.git_tools.read_only_tools)
+    reviewer.tools = (*egent.builtin_tools.git_tools.read_only_tools,)
     submitted = await reviewer.request_submit(
         {"is_accepted": (bool, "是否通过验收"), "summary": (str, "验收意见摘要")},
     )

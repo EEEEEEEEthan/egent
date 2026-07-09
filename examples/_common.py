@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from collections.abc import Awaitable, Callable
-from pathlib import Path, PurePosixPath
-from typing import override
+from pathlib import Path
 
 import egent.builtin_tools.path_validator
-import egent.tool
 
 _SENSITIVE_PATTERNS: tuple[str, ...] = (
     "**/.model.toml",
 )
 
-_SEARCH_EXCLUDED_PATTERNS: tuple[str, ...] = (
-    "**/.model.toml",
+_DISCOVERABLE_BLACKLIST_PATTERNS: tuple[str, ...] = (
     "**/.git",
     "**/*.pyc",
     "**/.pytest_cache",
@@ -23,52 +21,43 @@ _SEARCH_EXCLUDED_PATTERNS: tuple[str, ...] = (
     "**/__pycache__",
 )
 
-
-def _matches_path_patterns(relative_text: str, patterns: tuple[str, ...]) -> bool:
-    path_segments = PurePosixPath(relative_text).parts
-    for segment_count in range(1, len(path_segments) + 1):
-        path_prefix = PurePosixPath(*path_segments[:segment_count])
-        if any(path_prefix.full_match(pattern) for pattern in patterns):
-            return True
-    return False
+_READABLE_BLACKLIST_PATTERNS: tuple[str, ...] = _SENSITIVE_PATTERNS
 
 
-class EgentPathValidator(egent.builtin_tools.path_validator.PathValidator):
-    """示例用路径校验：cwd 内可发现，敏感文件禁读写，搜索排除噪声路径。"""
+def create_egent_path_permissions(
+    root: Path | None = None,
+) -> egent.builtin_tools.path_validator.PathPermissions:
+    """示例用路径权限：root 内可发现，敏感文件禁读写，噪声路径不可发现。"""
+    scope_root = (root or Path.cwd()).resolve()
+    return egent.builtin_tools.path_validator.PathPermissions(
+        root=scope_root,
+        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=("**",),
+            blacklist=_DISCOVERABLE_BLACKLIST_PATTERNS,
+        ),
+        readable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=("**",),
+            blacklist=_READABLE_BLACKLIST_PATTERNS,
+        ),
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=("**",),
+            blacklist=_READABLE_BLACKLIST_PATTERNS,
+        ),
+    )
 
-    def __relative_posix(self, path: Path) -> str | None:
-        try:
-            return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
-        except ValueError:
-            return None
 
-    def __is_sensitive(self, path: Path) -> bool:
-        relative_text = self.__relative_posix(path)
-        if relative_text is None:
-            return False
-        return _matches_path_patterns(relative_text, _SENSITIVE_PATTERNS)
-
-    def __is_search_excluded(self, path: Path) -> bool:
-        relative_text = self.__relative_posix(path)
-        if relative_text is None:
-            return True
-        return _matches_path_patterns(relative_text, _SEARCH_EXCLUDED_PATTERNS)
-
-    @override
-    def _is_discoverable(self, path: Path) -> bool:
-        return self.__relative_posix(path) is not None
-
-    @override
-    def _is_readable(self, path: Path) -> bool:
-        return self.__relative_posix(path) is not None and not self.__is_sensitive(path)
-
-    @override
-    def _is_editable(self, path: Path) -> bool:
-        return self.__relative_posix(path) is not None and not self.__is_sensitive(path)
-
-    @override
-    def _is_searchable(self, path: Path) -> bool:
-        return self.__relative_posix(path) is not None and not self.__is_search_excluded(path)
+def create_read_only_egent_path_permissions(
+    root: Path | None = None,
+) -> egent.builtin_tools.path_validator.PathPermissions:
+    """示例用只读路径权限：可发现可读，全部路径不可编辑。"""
+    base = create_egent_path_permissions(root)
+    return dataclasses.replace(
+        base,
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(),
+            blacklist=(),
+        ),
+    )
 
 
 def reload_modules() -> str:  # pylint: disable=import-outside-toplevel

@@ -13,10 +13,6 @@ import _common
 import egent
 import egent.agent
 
-path_validator = _common.EgentPathValidator()
-file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
-file_write_tools = egent.builtin_tools.file_system_tools.get_edit_tools(path_validator)
-
 
 class CodingGaveUp(Exception):
     """开发者主动放弃任务。"""
@@ -30,7 +26,7 @@ async def coding(
     agent: egent.agent.Agent,
     prompt: str,
     *,
-    custom_path_validator: _common.EgentPathValidator | None = None,
+    custom_path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
 ) -> tuple[bool, str]:
     """执行一轮开发：按 prompt 实现、提交、跑 pytest。
 
@@ -39,8 +35,7 @@ async def coding(
     Args:
         agent: 对话上下文。
         prompt: 开发需求描述。
-        custom_path_validator: 可选的自定义路径校验器，用于生成文件写入工具集；
-            为 ``None`` 时沿用模块级的 ``file_write_tools``。
+        custom_path_permissions: 可选的自定义路径权限；为 ``None`` 时沿用 agent 当前权限或默认权限。
 
     Returns:
         (finished, message): ``finished`` 为 True 表示提交成功且 pytest 通过；
@@ -49,18 +44,13 @@ async def coding(
     Raises:
         CodingGaveUp: 开发者放弃任务。
     """
-    write_tools = (
-        egent.builtin_tools.file_system_tools.get_edit_tools(custom_path_validator)
-        if custom_path_validator is not None
-        else file_write_tools
-    )
+    if custom_path_permissions is not None:
+        agent.path_permissions = custom_path_permissions
+    elif agent.path_permissions is None:
+        agent.path_permissions = _common.create_egent_path_permissions()
 
     agent.add_message("system", prompt)
-    agent.tools = [
-        *file_read_tools,
-        *write_tools,
-        *egent.builtin_tools.git_tools.read_only_tools,
-    ]
+    agent.tools = [*egent.builtin_tools.git_tools.read_only_tools]
     submitted = await agent.request_submit(
         {"success": (bool, "任务是否完成"), "reason": (str, "放弃任务时说明原因")},
     )

@@ -90,7 +90,9 @@ python examples/example_agent.py
 
 ### 路径安全
 
-`examples/_common.py` 中的 `EgentPathValidator` 继承 `PathValidator`，控制哪些路径可被发现、读取、编辑、搜索。
+`Agent` 通过 ``path_permissions`` 字段控制内置文件工具的路径权限；写入能力由 ``editable`` 白名单与黑名单决定。权限变化后下次 ``request()`` 会自动追加「路径权限已更新」system 消息（与工具集变更提示类似）。
+
+``examples/_common.py`` 中的 ``create_egent_path_permissions()`` 返回 ``PathPermissions``，用白名单与黑名单控制可发现、可读、可编辑；可搜索等价于可发现且可读。``list_path_permissions`` 工具可列出当前规则。
 
 ### 工作流
 

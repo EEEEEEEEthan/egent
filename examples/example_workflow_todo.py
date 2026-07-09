@@ -7,28 +7,32 @@
 
 from __future__ import annotations
 
+import dataclasses
 import subprocess
 import sys
 from pathlib import Path
-from typing import override
 
 import _common
 import example_workflow_develop
+import egent.builtin_tools.path_validator
 
 
-class TodoPathValidator(_common.EgentPathValidator):
-    """路径校验器：todo 文件本身不允许编辑，其他路径行为与父类一致。"""
-
-    def __init__(self, todo_path: Path) -> None:
-        super().__init__()
-        self._todo_path = todo_path.resolve()
-
-    @override
-    def _is_editable(self, path: Path) -> bool:
-        """若传入路径与 todo 文件路径相同则返回 False，否则调用父类逻辑。"""
-        if path.resolve() == self._todo_path:
-            return False
-        return super()._is_editable(path)
+def create_todo_path_permissions(
+    todo_path: Path,
+) -> egent.builtin_tools.path_validator.PathPermissions:
+    """todo 文件本身不可编辑，其余路径沿用默认权限。"""
+    base = _common.create_egent_path_permissions()
+    try:
+        relative_todo = todo_path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return base
+    return dataclasses.replace(
+        base,
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=base.editable.whitelist,
+            blacklist=base.editable.blacklist + (relative_todo,),
+        ),
+    )
 
 
 def _read_first_task(content: str) -> str:
@@ -104,7 +108,7 @@ async def todo_digest_workflow(todo_file: str) -> str:
     if not todo_path.exists():
         return f"错误: 文件不存在: {todo_path}"
 
-    todo_validator = TodoPathValidator(todo_path)
+    todo_permissions = create_todo_path_permissions(todo_path)
     results: list[tuple[str, bool, str]] = []
 
     while True:
@@ -119,7 +123,7 @@ async def todo_digest_workflow(todo_file: str) -> str:
 
         try:
             success, summary = await example_workflow_develop.begin_develop_workflow(
-                first_line, custom_path_validator=todo_validator
+                first_line, custom_path_permissions=todo_permissions
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             success = False

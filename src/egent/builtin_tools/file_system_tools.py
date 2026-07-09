@@ -19,7 +19,9 @@ __all__ = [
     "get_create_file_tool",
     "get_delete_tool",
     "get_edit_tools",
+    "get_file_tools",
     "get_read_file_tool",
+    "get_list_path_permissions_tool",
     "get_read_tools",
     "get_replace_tool",
     "get_rewrite_tool",
@@ -40,8 +42,8 @@ def _read_utf8_text(resolved_path: Path, path_label: str) -> tuple[str | None, s
 
 def _read_utf8_file(
     path_text: str,
-    validator: egent.builtin_tools.path_validator.PathValidator | None,
-    may_access: Callable[[egent.builtin_tools.path_validator.PathValidator, Path], bool],
+    validator: egent.builtin_tools.path_validator.PathPermissions | None,
+    may_access: Callable[[egent.builtin_tools.path_validator.PathPermissions, Path], bool],
 ) -> tuple[Path | None, str | None, str | None]:
     resolved_path = egent.builtin_tools.path_validator.resolve_path(path_text)
     if validator is not None and not may_access(validator, resolved_path):
@@ -54,7 +56,7 @@ def _read_utf8_file(
 
 def _resolve_scoped_path(
     path_text: str,
-    validator: egent.builtin_tools.path_validator.PathValidator | None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None,
 ) -> tuple[Path | None, str | None]:
     resolved_path = egent.builtin_tools.path_validator.resolve_path(path_text)
     if validator is not None and not validator.is_editable(resolved_path):
@@ -64,7 +66,7 @@ def _resolve_scoped_path(
 
 def _open_existing_file(
     path_text: str,
-    validator: egent.builtin_tools.path_validator.PathValidator | None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None,
 ) -> tuple[Path | None, str | None]:
     resolved_path, error = _resolve_scoped_path(path_text, validator)
     if error:
@@ -76,7 +78,7 @@ def _open_existing_file(
 
 def _open_directory(
     directory_text: str,
-    validator: egent.builtin_tools.path_validator.PathValidator | None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None,
 ) -> tuple[Path | None, str | None]:
     directory_input = directory_text or "."
     root = egent.builtin_tools.path_validator.resolve_path(directory_input)
@@ -111,7 +113,7 @@ def _slice_lines_from_position(
 
 
 def get_walk_files_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "walk_files",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -179,7 +181,7 @@ def get_walk_files_tool(
 def _search_file_content(
     resolved: Path,
     regex: re.Pattern,
-    validator: egent.builtin_tools.path_validator.PathValidator | None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None,
     directory_label: str,
 ) -> str:
     """在单个文件中搜索正则匹配行并返回格式化结果。"""
@@ -202,7 +204,7 @@ def _search_file_content(
 def _search_directory(
     directory: str,
     regex: re.Pattern,
-    validator: egent.builtin_tools.path_validator.PathValidator | None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None,
     file_filter: str | None,
 ) -> str:
     """在目录中递归搜索文件内容和文件名匹配。"""
@@ -236,7 +238,7 @@ def _search_directory(
 
 
 def get_search_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "search",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -271,7 +273,7 @@ def get_search_tool(
 
 
 def get_read_file_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "read_file",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -328,7 +330,7 @@ def get_read_file_tool(
 
 
 def get_create_file_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "create_file",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -360,7 +362,7 @@ def get_create_file_tool(
 
 
 def get_append_text_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "append_text",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -389,7 +391,7 @@ def get_append_text_tool(
 
 
 def get_apply_patch_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "apply_patch",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -429,7 +431,7 @@ def get_apply_patch_tool(
 
 
 def get_replace_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "replace",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -469,7 +471,7 @@ def get_replace_tool(
 
 
 def get_rewrite_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "rewrite",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -499,7 +501,7 @@ def get_rewrite_tool(
 
 
 def get_delete_tool(
-    validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "delete",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
@@ -532,19 +534,52 @@ def get_delete_tool(
     return delete
 
 
-def get_read_tools(
-    path_validator: egent.builtin_tools.path_validator.PathValidator | None = None,
-) -> tuple[egent.tool.ToolCallable, egent.tool.ToolCallable, egent.tool.ToolCallable]:
-    """生成预配置的文件读取工具集（遍历、读取、搜索）。"""
-    return (
-        get_walk_files_tool(path_validator),
-        get_read_file_tool(path_validator),
-        get_search_tool(path_validator),
+def get_list_path_permissions_tool(
+    path_permissions: egent.builtin_tools.path_validator.PathPermissions,
+    name: str = "list_path_permissions",
+    description: str | None = None,
+) -> egent.tool.ToolCallable:
+    """生成预配置的路径权限列表工具。"""
+    return egent.builtin_tools.path_validator.get_list_path_permissions_tool(
+        path_permissions,
+        name=name,
+        description=description,
     )
 
 
+def get_read_tools(
+    path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
+) -> tuple[
+    egent.tool.ToolCallable,
+    egent.tool.ToolCallable,
+    egent.tool.ToolCallable,
+    egent.tool.ToolCallable,
+]:
+    """生成预配置的文件读取工具集（权限列表、遍历、读取、搜索）。"""
+    list_tool = (
+        get_list_path_permissions_tool(path_permissions)
+        if path_permissions is not None
+        else _get_unrestricted_path_permissions_list_tool()
+    )
+    return (
+        list_tool,
+        get_walk_files_tool(path_permissions),
+        get_read_file_tool(path_permissions),
+        get_search_tool(path_permissions),
+    )
+
+
+def _get_unrestricted_path_permissions_list_tool() -> egent.tool.ToolCallable:
+    def list_path_permissions() -> str:
+        return "路径权限未配置，所有路径均可访问。"
+
+    list_path_permissions.__name__ = "list_path_permissions"
+    list_path_permissions.__doc__ = "列出当前路径权限规则（可发现、可读、可编辑的白名单与黑名单）"
+    return list_path_permissions
+
+
 def get_edit_tools(
-    path_validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
 ) -> tuple[
     egent.tool.ToolCallable,
     egent.tool.ToolCallable,
@@ -555,17 +590,24 @@ def get_edit_tools(
 ]:
     """生成预配置的文件编辑工具集（创建、追加、编辑、替换、重写、删除）。"""
     return (
-        get_create_file_tool(path_validator),
-        get_append_text_tool(path_validator),
-        get_apply_patch_tool(path_validator),
-        get_replace_tool(path_validator),
-        get_rewrite_tool(path_validator),
-        get_delete_tool(path_validator),
+        get_create_file_tool(path_permissions),
+        get_append_text_tool(path_permissions),
+        get_apply_patch_tool(path_permissions),
+        get_replace_tool(path_permissions),
+        get_rewrite_tool(path_permissions),
+        get_delete_tool(path_permissions),
     )
 
 
+def get_file_tools(
+    path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
+) -> tuple[egent.tool.ToolCallable, ...]:
+    """生成预配置的全部文件系统内置工具。"""
+    return get_read_tools(path_permissions) + get_edit_tools(path_permissions)
+
+
 def get_tools(
-    path_validator: egent.builtin_tools.path_validator.PathValidator | None = None,
+    path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
 ) -> tuple[egent.tool.ToolCallable, ...]:
     """生成预配置的全部文件系统工具。"""
-    return get_read_tools(path_validator) + get_edit_tools(path_validator)
+    return get_file_tools(path_permissions)

@@ -23,6 +23,8 @@ from openai.types.chat.chat_completion_tool_union_param import (
 )
 
 import egent._line_position
+import egent.builtin_tools.file_system_tools
+import egent.builtin_tools.path_validator
 import egent.builtin_tools.skill_tools
 import egent.ephemeral_dirs
 import egent.limits
@@ -160,7 +162,7 @@ class TurnCompleted(AgentEvent):
 
 
 
-class Agent:
+class Agent:  # pylint: disable=too-many-instance-attributes
     """维护 messages 历史并调用 Chat Completions API。"""
 
     def __init__(
@@ -185,12 +187,37 @@ class Agent:
         self.__messages: list[ChatMessage] = []
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         self.__tool_schemas_text: str | None = None
+        self.__path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None
+        self.__path_permissions_text: str | None = None
+        self.__file_tools = self.__build_file_tools()
         skill_index, skill_catalog = build_skills(skills)
         self.__skill_tools = (
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
         )
         if skill_index:
             self.__add_message("system", skill_catalog)
+
+    @property
+    def path_permissions(self) -> egent.builtin_tools.path_validator.PathPermissions | None:
+        """文件工具路径权限。"""
+        return self.__path_permissions
+
+    @path_permissions.setter
+    def path_permissions(
+        self,
+        value: egent.builtin_tools.path_validator.PathPermissions | None,
+    ) -> None:
+        self.__path_permissions = value
+
+    def __build_file_tools(self) -> list[egent.tool.ToolCallable]:
+        return list(
+            egent.builtin_tools.file_system_tools.get_file_tools(self.__path_permissions),
+        )
+
+    def __file_tools_state_text(self) -> str:
+        if self.__path_permissions is None:
+            return ""
+        return self.__path_permissions.format_rules()
 
     def __copy__(self) -> Agent:
         cloned = Agent.__new__(Agent)
@@ -239,13 +266,23 @@ class Agent:
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         await self.__request()
 
-    async def __request(  # pylint: disable=too-many-locals
+    async def __request(  # pylint: disable=too-many-locals,too-many-branches
         self,
         *,
         extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> None:
-        api_tools, tool_handlers = egent.tool.resolve_tools([*self.__skill_tools, *self.tools])
         extra_tools = tuple[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler], ...](extra_tools)
+        file_tools_state_text = self.__file_tools_state_text()
+        if (
+            self.__path_permissions_text is not None
+            and file_tools_state_text != self.__path_permissions_text
+        ):
+            self.__add_message("system", "路径权限已更新")
+        self.__file_tools = self.__build_file_tools()
+        self.__path_permissions_text = file_tools_state_text
+        api_tools, tool_handlers = egent.tool.resolve_tools(
+            [*self.__skill_tools, *self.__file_tools, *self.tools],
+        )
         api_tools.extend(tool_schema for tool_schema, _ in extra_tools)
         tool_handlers.update(
             {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in extra_tools}

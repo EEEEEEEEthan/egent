@@ -15,14 +15,11 @@ import example_workflow_review
 import egent
 import egent.agent
 
-path_validator = _common.EgentPathValidator()
-file_read_tools = egent.builtin_tools.file_system_tools.get_read_tools(path_validator)
-
 
 async def begin_develop_workflow(
     description: str,
     *,
-    custom_path_validator: _common.EgentPathValidator | None = None,
+    custom_path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
 ) -> tuple[bool, str]:
     """运行开发工作流：编码与验收循环，直至通过或耗尽重试。
 
@@ -30,13 +27,14 @@ async def begin_develop_workflow(
 
     Args:
         description: 开发需求描述。
-        custom_path_validator: 可选的自定义路径校验器，透传给 ``coding``；
+        custom_path_permissions: 可选的自定义路径权限，透传给 ``coding``；
             为 ``None`` 时使用 ``coding`` 的默认行为。
 
     Returns:
         (success, summary): success 为 True 表示验收通过。
     """
     ethan = egent.agent.Agent("gpt5-flash")
+    ethan.path_permissions = _common.create_egent_path_permissions()
     printer = conversation_printer.ConversationPrinter(ethan)
     ethan.add_message("system", "你是ethan，是这个项目的开发工程师")
     ethan.add_message(
@@ -47,7 +45,7 @@ async def begin_develop_workflow(
     for _ in range(5):
         try:
             finished, _ = await example_workflow_coding.coding(
-                ethan, description, custom_path_validator=custom_path_validator
+                ethan, description, custom_path_permissions=custom_path_permissions
             )
         except example_workflow_coding.CodingGaveUp as error:
             return False, f"你的手下放弃了任务。原因是: \n{error.reason}"
@@ -95,6 +93,7 @@ async def run_turn(
 ) -> None:
     """运行一轮交互：收集用户输入并发送请求。"""
     prompt = input(">>> ").strip()
+    agent.path_permissions = _common.create_egent_path_permissions()
     if prompt == "/doit":
         agent.add_message(
             "user",
@@ -105,7 +104,6 @@ async def run_turn(
             """
         )
         agent.tools = [
-            *file_read_tools,
             *egent.builtin_tools.git_tools.read_only_tools,
             delegate_develop_workflow,
             egent.builtin_tools.git_tools.git_add,
@@ -116,7 +114,6 @@ async def run_turn(
     else:
         agent.add_message("user", prompt)
         agent.tools = [
-            *file_read_tools,
             *egent.builtin_tools.git_tools.read_only_tools,
             egent.builtin_tools.git_tools.git_add,
             egent.builtin_tools.git_tools.git_commit,
@@ -127,7 +124,11 @@ async def run_turn(
 
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
-    agent = egent.agent.Agent("gpt5", skills=(".agents/skills/build-workflow",))
+    agent = egent.agent.Agent(
+        "gpt5",
+        skills=(".agents/skills/build-workflow",),
+    )
+    agent.path_permissions = _common.create_egent_path_permissions()
     agent.add_message(
         "system",
         """你时egent.你是这个agent项目的主管,同时,你就是这个项目驱动的agent.
