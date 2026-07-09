@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal
 
 import httpx
 import pydantic
@@ -32,9 +32,6 @@ import egent.tool
 ChatRole = Literal["system", "user", "assistant", "tool"]
 ChatMessage = dict[str, Any]
 
-_EGENT_TEMP_DIR = pathlib.Path.cwd() / ".egent" / ".temp"
-_EGENT_LOG_DIR = pathlib.Path.cwd() / ".egent" / ".logs"
-_SUBMIT_REMINDER = "工作完成后使用 submit_task 工具提交结果"
 _REQUEST_RETRY_COUNT = 3
 _REQUEST_RETRY_DELAY_SECONDS = 2.0
 _RETRYABLE_NETWORK_EXCEPTIONS: tuple[type[BaseException], ...] = (
@@ -45,7 +42,25 @@ _RETRYABLE_NETWORK_EXCEPTIONS: tuple[type[BaseException], ...] = (
     APIStatusError,
 )
 _logger = logging.getLogger(__name__)
-_Result = TypeVar("_Result")
+
+
+def _configure_logging() -> None:
+    log_dir = pathlib.Path.cwd() / ".egent" / ".logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = str(log_dir / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+    if not any(
+        isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == log_path
+        for handler in _logger.handlers
+    ):
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(logging.Formatter("%(message)s"))
+        _logger.setLevel(logging.INFO)
+        _logger.addHandler(file_handler)
+    egent.ephemeral_dirs.prune_oldest_files_in_directory(log_dir)
+
+
+_configure_logging()
 
 
 def build_skills(
@@ -84,21 +99,7 @@ def _parse_skill_frontmatter(content: str) -> dict[str, str]:
     return fields
 
 
-_EGENT_LOG_DIR.mkdir(parents=True, exist_ok=True)
-_LOG_PATH = str(_EGENT_LOG_DIR / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
-if not any(
-    isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == _LOG_PATH
-    for handler in _logger.handlers
-):
-    _file_handler = logging.FileHandler(_LOG_PATH, encoding="utf-8")
-    _file_handler.setLevel(logging.INFO)
-    _file_handler.setFormatter(logging.Formatter("%(message)s"))
-    _logger.setLevel(logging.INFO)
-    _logger.addHandler(_file_handler)
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(_EGENT_LOG_DIR)
-
-
-async def _run_with_network_retry(operation: Callable[[], Awaitable[_Result]]) -> _Result:
+async def _run_with_network_retry[_Result](operation: Callable[[], Awaitable[_Result]]) -> _Result:
     """网络异常时静默重试，不写入对话上下文。"""
     last_error: BaseException | None = None
     for attempt_index in range(_REQUEST_RETRY_COUNT):
@@ -315,17 +316,19 @@ class Agent:
     async def request_submit(
         self,
         submit_fields: dict[str, tuple[type, str]],
+        tool_name: str = "submit_task",
     ) -> dict[str, Any]:
-        """循环请求直至 ``submit_task`` 工具被调用，返回提交的参数。
+        """循环请求直至指定 submit 工具被调用，返回提交的参数。
 
         Args:
             submit_fields: submit 参数规格，``字段名 -> (类型, 描述)``。
+            tool_name: submit 工具名，默认 ``submit_task``。
 
         Returns:
             agent 提交的参数，key 与 ``submit_fields`` 一致。
         """
         submit_model = pydantic.create_model(
-            "submit_task",
+            "SubmitArguments",
             **{
                 field_name: (field_type, pydantic.Field(description=field_description))
                 for field_name, (field_type, field_description) in submit_fields.items()
@@ -333,23 +336,23 @@ class Agent:
         )
         submit_schema = pydantic_function_tool(
             submit_model,
-            name="submit_task",
+            name=tool_name,
             description="提交任务结果，结束当前工作循环",
         )
         submitted_arguments: dict[str, Any] | None = None
+        submit_reminder = f"工作完成后使用 {tool_name} 工具提交结果"
 
         def submit_handler(arguments_json: str) -> str:
             nonlocal submitted_arguments
             submitted_arguments = submit_model.model_validate_json(arguments_json).model_dump()
             return "收到"
 
-        self.__add_message("system", _SUBMIT_REMINDER)
-        while submitted_arguments is None:
+        self.__add_message("system", submit_reminder)
+        while True:
             await self.__request(extra_tools=((submit_schema, submit_handler),))
-            if submitted_arguments is None:
-                self.__add_message("system", _SUBMIT_REMINDER)
-
-        return submitted_arguments
+            if submitted_arguments is not None:
+                return submitted_arguments  # pyright: ignore[reportUnreachable]
+            self.__add_message("system", submit_reminder)
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""
@@ -402,11 +405,12 @@ def _truncate_and_save(content: str, prefix: str) -> str:
 
     head = content[:egent.limits.TOOL_RESULT_MAX_CHARS]
     tail = content[egent.limits.TOOL_RESULT_MAX_CHARS:]
-    _EGENT_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
+    egent_temp_dir.mkdir(parents=True, exist_ok=True)
     egent.model_settings.ensure_egent_gitignore()
     file_name = f"{prefix}-{uuid.uuid4().hex}.txt"
-    (_EGENT_TEMP_DIR / file_name).write_text(content, encoding="utf-8")
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(_EGENT_TEMP_DIR)
+    (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
+    egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
     relative_path = f".egent/.temp/{file_name}"
     file_lines = content.splitlines(keepends=True) or ([content] if content else [])
     next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
