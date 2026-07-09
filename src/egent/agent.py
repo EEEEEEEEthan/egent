@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import pathlib
 import re
@@ -34,12 +35,6 @@ ChatMessage = dict[str, Any]
 _EGENT_TEMP_DIR = pathlib.Path.cwd() / ".egent" / ".temp"
 _EGENT_LOG_DIR = pathlib.Path.cwd() / ".egent" / ".logs"
 _SUBMIT_REMINDER = "工作完成后使用 submit_task 工具提交结果"
-_SUMMARIZE_SYSTEM = (
-    "请将以下对话历史压缩为简洁摘要，保留关键决策、已完成工作、"
-    "当前代码状态与待解决问题。"
-)
-_SUMMARY_PREFIX = "此前工作摘要:\n"
-_SKILL_FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 _REQUEST_RETRY_COUNT = 3
 _REQUEST_RETRY_DELAY_SECONDS = 2.0
 _RETRYABLE_NETWORK_EXCEPTIONS: tuple[type[BaseException], ...] = (
@@ -78,7 +73,7 @@ def build_skills(
 
 
 def _parse_skill_frontmatter(content: str) -> dict[str, str]:
-    match = _SKILL_FRONTMATTER_PATTERN.match(content)
+    match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
     if not match:
         return {}
     fields: dict[str, str] = {}
@@ -188,6 +183,7 @@ class Agent:
         self.tools: list[egent.tool.ToolCallable] = []
         self.__messages: list[ChatMessage] = []
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
+        self.__tool_schemas_text: str | None = None
         skill_index, skill_catalog = build_skills(skills)
         self.__skill_tools = (
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
@@ -204,6 +200,7 @@ class Agent:
         cloned.__messages = deepcopy(self.__messages)
         cloned.__event_listeners = []
         cloned.__skill_tools = self.__skill_tools
+        cloned.__tool_schemas_text = self.__tool_schemas_text
         return cloned
 
     @property
@@ -251,6 +248,10 @@ class Agent:
         tool_handlers.update(
             {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in extra_tools}
         )
+        tool_schemas_text = json.dumps(api_tools, ensure_ascii=False, sort_keys=True)
+        if self.__tool_schemas_text is not None and tool_schemas_text != self.__tool_schemas_text:
+            self.__add_message("system", "工具集已更新")
+        self.__tool_schemas_text = tool_schemas_text
 
         while True:
             for attempt_index in range(_REQUEST_RETRY_COUNT):
@@ -378,14 +379,17 @@ class Agent:
             lambda: self.__client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": _SUMMARIZE_SYSTEM},
+                    {"role": "system", "content": (
+                        "请将以下对话历史压缩为简洁摘要，保留关键决策、已完成工作、"
+                        "当前代码状态与待解决问题。"
+                    )},
                     {"role": "user", "content": "\n\n".join(summary_parts)},
                 ],
             ),
         )
         summary = response.choices[0].message.content or ""
         self.__messages = deepcopy(system_prefix)
-        self.__add_message("system", f"{_SUMMARY_PREFIX}{summary}")
+        self.__add_message("system", f"此前工作摘要:\n{summary}")
         return summary
 
 
