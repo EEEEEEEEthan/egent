@@ -25,7 +25,8 @@ __all__ = [
     "get_read_tools",
     "get_replace_tool",
     "get_rewrite_tool",
-    "get_search_tool",
+    "get_search_directory_tool",
+    "get_search_file_tool",
     "get_tools",
     "get_walk_files_tool",
 ]
@@ -182,11 +183,11 @@ def _search_file_content(
     resolved: Path,
     regex: re.Pattern,
     validator: egent.builtin_tools.path_validator.PathPermissions | None,
-    directory_label: str,
+    path_label: str,
 ) -> str:
-    """在单个文件中搜索正则匹配行并返回格式化结果。"""
-    if validator is not None and not validator.is_searchable(resolved):
-        return f"错误：没有权限搜索文件：{directory_label}"
+    """在单个可读文件中搜索正则匹配行并返回格式化结果。"""
+    if validator is not None and not validator.is_readable(resolved):
+        return f"错误：没有权限搜索文件：{path_label}"
     try:
         text = resolved.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
@@ -237,18 +238,18 @@ def _search_directory(
     return "\n".join(lines)
 
 
-def get_search_tool(
+def get_search_directory_tool(
     validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
-    name: str = "search",
+    name: str = "search_directory",
     description: str | None = None,
 ) -> egent.tool.ToolCallable:
-    """生成预配置的目录搜索工具。"""
+    """生成预配置的目录搜索工具（仅搜索可发现且可读的文件）。"""
     working_directory = Path.cwd()
     tool_description = description or (
-        "在指定目录中按正则表达式逐行搜索文件或文件名并输出"
+        "在指定目录中按正则表达式逐行搜索文件或文件名并输出（仅搜索可发现且可读的文件）"
     )
 
-    def search(
+    def search_directory(
         pattern: str,
         directory: str = ".",
         file_filter: str | None = None,
@@ -257,19 +258,49 @@ def get_search_tool(
             regex = re.compile(pattern)
         except re.error as regex_error:
             return f"错误：无效的正则表达式：{regex_error}"
-        resolved = egent.builtin_tools.path_validator.resolve_path(directory)
-        if resolved.is_file():
-            return _search_file_content(resolved, regex, validator, directory)
         return _search_directory(directory, regex, validator, file_filter)
 
-    search.__name__ = name
-    search.__doc__ = (
+    search_directory.__name__ = name
+    search_directory.__doc__ = (
         f"{tool_description}\n\n"
         "@param pattern 正则表达式\n"
-        f"@param directory 搜索路径（可为文件或目录）.如果填相对路径将以工作目录 {working_directory} 为基准.缺省 '.'\n"
-        "@param file_filter 文件名 glob 过滤（仅目录模式生效），如 '*.py'"
+        f"@param directory 搜索目录.如果填相对路径将以工作目录 {working_directory} 为基准.缺省 '.'\n"
+        "@param file_filter 文件名 glob 过滤，如 '*.py'"
     )
-    return search
+    return search_directory
+
+
+def get_search_file_tool(
+    validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
+    name: str = "search_file",
+    description: str | None = None,
+) -> egent.tool.ToolCallable:
+    """生成预配置的单文件搜索工具（仅搜索可读文件）。"""
+    working_directory = Path.cwd()
+    tool_description = description or (
+        "在指定文件中按正则表达式逐行搜索并输出（仅搜索可读文件）"
+    )
+
+    def search_file(
+        pattern: str,
+        path: str,
+    ) -> str:
+        try:
+            regex = re.compile(pattern)
+        except re.error as regex_error:
+            return f"错误：无效的正则表达式：{regex_error}"
+        resolved = egent.builtin_tools.path_validator.resolve_path(path)
+        if not resolved.is_file():
+            return f"错误：文件不存在：{path}"
+        return _search_file_content(resolved, regex, validator, path)
+
+    search_file.__name__ = name
+    search_file.__doc__ = (
+        f"{tool_description}\n\n"
+        "@param pattern 正则表达式\n"
+        f"@param path 文件路径.如果填相对路径将以工作目录 {working_directory} 为基准"
+    )
+    return search_file
 
 
 def get_read_file_tool(
@@ -554,8 +585,9 @@ def get_read_tools(
     egent.tool.ToolCallable,
     egent.tool.ToolCallable,
     egent.tool.ToolCallable,
+    egent.tool.ToolCallable,
 ]:
-    """生成预配置的文件读取工具集（权限列表、遍历、读取、搜索）。"""
+    """生成预配置的文件读取工具集（权限列表、遍历、读取、目录搜索、文件搜索）。"""
     list_tool = (
         get_list_path_permissions_tool(path_permissions)
         if path_permissions is not None
@@ -565,7 +597,8 @@ def get_read_tools(
         list_tool,
         get_walk_files_tool(path_permissions),
         get_read_file_tool(path_permissions),
-        get_search_tool(path_permissions),
+        get_search_directory_tool(path_permissions),
+        get_search_file_tool(path_permissions),
     )
 
 

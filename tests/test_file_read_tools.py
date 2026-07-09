@@ -181,6 +181,27 @@ def test_walk_files_hides_git_with_glob_pattern(tmp_path: Path, monkeypatch) -> 
     assert ".git" not in result
 
 
+def _reject_discoverable_only(
+    root: Path,
+    pattern: str,
+) -> egent.builtin_tools.path_validator.PathPermissions:
+    base = _under_root(root)
+
+    def with_blacklist(
+        rule: egent.builtin_tools.path_validator.PathPermissionRule,
+    ) -> egent.builtin_tools.path_validator.PathPermissionRule:
+        return egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=rule.whitelist,
+            blacklist=rule.blacklist + (pattern,),
+        )
+
+    return egent.builtin_tools.path_validator.PathPermissions(
+        root=base.root,
+        discoverable=with_blacklist(base.discoverable),
+        readable=base.readable,
+        editable=base.editable,
+    )
+
 def test_read_file_respects_validator(tmp_path: Path, monkeypatch) -> None:
     """read_file 应拒绝 validator 不允许的路径。"""
     monkeypatch.chdir(tmp_path)
@@ -195,116 +216,139 @@ def test_read_file_respects_validator(tmp_path: Path, monkeypatch) -> None:
     assert "没有权限" in result
 
 
-def test_search_matches_line_content(tmp_path: Path, monkeypatch) -> None:
-    """search 应匹配文件行内容。"""
+def test_search_directory_matches_line_content(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 应匹配文件行内容。"""
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "alpha.txt"
     sample_file.write_text("hello\nworld\nhello again\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
-    result = search("hello")
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    result = search_directory("hello")
 
     assert result == "[alpha.txt line1] hello\n[alpha.txt line3] hello again"
 
 
-def test_search_matches_filename(tmp_path: Path, monkeypatch) -> None:
-    """search 应匹配文件名。"""
+def test_search_directory_matches_filename(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 应匹配文件名。"""
     monkeypatch.chdir(tmp_path)
     target_file = tmp_path / "needle.txt"
     target_file.write_text("plain text\n", encoding="utf-8")
     (tmp_path / "other.txt").write_text("plain text\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
-    result = search("needle")
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    result = search_directory("needle")
 
     assert result == "[needle.txt]"
 
 
-def test_search_respects_validator(tmp_path: Path, monkeypatch) -> None:
-    """search 应忽略 validator 拒绝的文件。"""
+def test_search_directory_respects_validator(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 应忽略不可发现或不可读的文件。"""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "public.txt").write_text("secret word\n", encoding="utf-8")
     secret_directory = tmp_path / "secret"
     secret_directory.mkdir()
     (secret_directory / "hidden.txt").write_text("secret word\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_reject_path_prefix(tmp_path, "secret/*"))
-    result = search("secret")
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(
+        _reject_path_prefix(tmp_path, "secret/*"),
+    )
+    result = search_directory("secret")
 
     assert "[public.txt line1] secret word" in result
     assert "hidden.txt" not in result
 
 
-def test_search_invalid_regex(tmp_path: Path, monkeypatch) -> None:
-    """search 在正则无效时应返回错误信息。"""
+def test_search_directory_invalid_regex(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 在正则无效时应返回错误信息。"""
     monkeypatch.chdir(tmp_path)
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
 
-    result = search("(")
+    result = search_directory("(")
 
     assert "无效的正则表达式" in result
 
 
-def test_search_file_mode_single_file(tmp_path: Path, monkeypatch) -> None:
-    """search 在 directory 为文件路径时应在单文件中逐行搜索。"""
+def test_search_file_matches_line_content(tmp_path: Path, monkeypatch) -> None:
+    """search_file 应在单文件中逐行搜索。"""
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "data.log"
     sample_file.write_text("error: timeout\ninfo: ok\nerror: retry\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
-    result = search("error", directory="data.log")
+    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+    result = search_file("error", path="data.log")
 
     assert result == "[data.log line1] error: timeout\n[data.log line3] error: retry"
 
 
-def test_search_file_mode_no_match(tmp_path: Path, monkeypatch) -> None:
-    """search 文件模式下无匹配应返回 (无匹配)。"""
+def test_search_file_no_match(tmp_path: Path, monkeypatch) -> None:
+    """search_file 无匹配应返回 (无匹配)。"""
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "notes.txt"
     sample_file.write_text("hello world\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
-    result = search("NOTFOUND", directory="notes.txt")
+    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+    result = search_file("NOTFOUND", path="notes.txt")
 
     assert result == "(无匹配)"
 
 
-def test_search_file_mode_respects_validator(tmp_path: Path, monkeypatch) -> None:
-    """search 文件模式下应校验 validator.is_searchable。"""
+def test_search_file_respects_readable_permission(tmp_path: Path, monkeypatch) -> None:
+    """search_file 应校验 is_readable。"""
     monkeypatch.chdir(tmp_path)
     secret_dir = tmp_path / "secret"
     secret_dir.mkdir()
     secret_file = secret_dir / "private.txt"
     secret_file.write_text("classified data\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_reject_path_prefix(tmp_path, "secret/*"))
-    result = search("classified", directory="secret/private.txt")
+    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(
+        _reject_path_prefix(tmp_path, "secret/*"),
+    )
+    result = search_file("classified", path="secret/private.txt")
 
     assert "没有权限" in result
 
 
-def test_search_filter_glob_in_directory(tmp_path: Path, monkeypatch) -> None:
-    """search filter 参数应对目录下的文件名做 glob 过滤。"""
+def test_search_file_allows_readable_but_not_discoverable(tmp_path: Path, monkeypatch) -> None:
+    """search_file 应允许搜索可读但不可发现的文件。"""
+    monkeypatch.chdir(tmp_path)
+    secret_dir = tmp_path / "secret"
+    secret_dir.mkdir()
+    secret_file = secret_dir / "private.txt"
+    secret_file.write_text("classified data\n", encoding="utf-8")
+
+    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(
+        _reject_discoverable_only(tmp_path, "secret/*"),
+    )
+    result = search_file("classified", path="secret/private.txt")
+
+    assert result == "[private.txt line1] classified data"
+
+
+def test_search_directory_skips_not_discoverable(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 应跳过不可发现但可读的文件。"""
+    monkeypatch.chdir(tmp_path)
+    secret_dir = tmp_path / "secret"
+    secret_dir.mkdir()
+    (secret_dir / "private.txt").write_text("classified data\n", encoding="utf-8")
+
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(
+        _reject_discoverable_only(tmp_path, "secret/*"),
+    )
+    result = search_directory("classified")
+
+    assert result == "(无匹配)"
+
+
+def test_search_directory_filter_glob(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 的 file_filter 应对文件名做 glob 过滤。"""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.py").write_text("import os\n", encoding="utf-8")
     (tmp_path / "b.txt").write_text("import os\n", encoding="utf-8")
     (tmp_path / "c.py").write_text("print('hi')\n", encoding="utf-8")
 
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
-    result = search("import", file_filter="*.py")
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    result = search_directory("import", file_filter="*.py")
 
     assert "[a.py line1] import os" in result
     assert "b.txt" not in result
     assert "c.py" not in result
-
-
-def test_search_filter_ignored_in_file_mode(tmp_path: Path, monkeypatch) -> None:
-    """search filter 在文件模式下应被忽略。"""
-    monkeypatch.chdir(tmp_path)
-    sample_file = tmp_path / "data.py"
-    sample_file.write_text("import sys\n", encoding="utf-8")
-
-    search = egent.builtin_tools.file_system_tools.get_search_tool(_under_root(tmp_path))
-    result = search("import", directory="data.py", file_filter="*.txt")
-
-    assert "[data.py line1] import sys" in result

@@ -56,7 +56,8 @@ python examples/example_agent.py
 |------|------|
 | `read_file` | 读取文件内容 |
 | `walk_files` | 遍历目录文件树 |
-| `search` | 按正则逐行搜索文件或文件名 |
+| `search_directory` | 在目录中按正则搜索（仅可发现且可读的文件） |
+| `search_file` | 在指定文件中按正则搜索（仅可读文件） |
 | `create_file` | 创建新文件 |
 | `append_text` | 向文件追加文本 |
 | `rewrite` | 重新写入文件 |
@@ -92,7 +93,7 @@ python examples/example_agent.py
 
 `Agent` 通过 ``path_permissions`` 字段控制内置文件工具的路径权限；写入能力由 ``editable`` 白名单与黑名单决定。权限变化后下次 ``request()`` 会自动追加「路径权限已更新」system 消息（与工具集变更提示类似）。
 
-``examples/_common.py`` 中的 ``create_egent_path_permissions()`` 返回 ``PathPermissions``，用白名单与黑名单控制可发现、可读、可编辑；可搜索等价于可发现且可读。``list_path_permissions`` 工具可列出当前规则。
+``examples/_common.py`` 中的 ``create_egent_path_permissions()`` 返回 ``PathPermissions``，用白名单与黑名单控制可发现、可读、可编辑；目录搜索要求可发现且可读，文件搜索仅要求可读。``list_path_permissions`` 工具可列出当前规则。
 
 ### 工作流
 

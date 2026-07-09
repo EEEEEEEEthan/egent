@@ -98,7 +98,7 @@ class PathPermissions:
         return self.editable.allows(self.relative_posix(path))
 
     def is_searchable(self, path: Path) -> bool:
-        """可搜索等价于可发现且可读。"""
+        """目录搜索等价于可发现且可读。"""
         return self.is_discoverable(path) and self.is_readable(path)
 
     def format_rules(self) -> str:
@@ -112,7 +112,8 @@ class PathPermissions:
             lines.append(f"  白名单: {_format_pattern_list(rule.whitelist)}")
             lines.append(f"  黑名单: {_format_pattern_list(rule.blacklist)}")
             lines.append("")
-        lines.append("可搜索: 可发现且可读")
+        lines.append("目录搜索: 可发现且可读")
+        lines.append("文件搜索: 可读")
         return "\n".join(lines)
 
 

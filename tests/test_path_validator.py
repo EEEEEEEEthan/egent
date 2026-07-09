@@ -118,7 +118,8 @@ def test_format_rules_includes_all_permissions(tmp_path: Path) -> None:
     assert "可读:" in formatted
     assert "可编辑:" in formatted
     assert "secret/**" in formatted
-    assert "可搜索: 可发现且可读" in formatted
+    assert "目录搜索: 可发现且可读" in formatted
+    assert "文件搜索: 可读" in formatted
 
 
 def test_list_path_permissions_tool_returns_formatted_rules(tmp_path: Path) -> None:
