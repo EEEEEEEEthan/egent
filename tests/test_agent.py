@@ -96,7 +96,7 @@ async def test_run_with_network_retry_does_not_retry_client_errors() -> None:
     assert attempt_count == 1
 
 
-def test_agent_includes_builtin_file_tools(monkeypatch, tmp_path) -> None:
+def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
     """Agent 应内置文件工具，无需手动加入 tools。"""
     monkeypatch.setattr(
         "egent.model_settings.ModelSettings.load",
@@ -109,13 +109,13 @@ def test_agent_includes_builtin_file_tools(monkeypatch, tmp_path) -> None:
 
     permissions = egent.builtin_tools.path_validator.PathPermissions(
         discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=(f"{tmp_path.resolve().as_posix()}/**",),
+            whitelist=("**",),
         ),
         readable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=(f"{tmp_path.resolve().as_posix()}/**",),
+            whitelist=("**",),
         ),
         editable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=(f"{tmp_path.resolve().as_posix()}/**",),
+            whitelist=("**",),
         ),
     )
     agent = egent.agent.Agent("test")
@@ -131,7 +131,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_request_notifies_path_permissions_change(monkeypatch, tmp_path) -> None:
+async def test_request_notifies_path_permissions_change(monkeypatch) -> None:
     """request 在路径权限变化时应追加 system 提示。"""
     monkeypatch.setattr(
         "egent.model_settings.ModelSettings.load",
@@ -143,21 +143,16 @@ async def test_request_notifies_path_permissions_change(monkeypatch, tmp_path) -
     )
 
     def make_permissions(blacklist: tuple[str, ...]) -> egent.builtin_tools.path_validator.PathPermissions:
-        scope_glob = f"{tmp_path.resolve().as_posix()}/**"
-        scoped_blacklist = tuple(
-            f"{tmp_path.resolve().as_posix()}/{pattern}"
-            for pattern in blacklist
-        )
         return egent.builtin_tools.path_validator.PathPermissions(
             discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=(scope_glob,),
+                whitelist=("**",),
             ),
             readable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=(scope_glob,),
-                blacklist=scoped_blacklist,
+                whitelist=("**",),
+                blacklist=blacklist,
             ),
             editable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=(scope_glob,),
+                whitelist=("**",),
             ),
         )
 

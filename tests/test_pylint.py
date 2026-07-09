@@ -13,7 +13,6 @@ PRODUCTION_TARGETS = (
     str(PROJECT_ROOT / "examples" / "example_workflow_coding.py"),
     str(PROJECT_ROOT / "examples" / "example_workflow_develop.py"),
     str(PROJECT_ROOT / "examples" / "example_workflow_review.py"),
-    str(PROJECT_ROOT / "examples" / "example_workflow_todo.py"),
     str(PROJECT_ROOT / "examples" / "_common.py"),
     str(PROJECT_ROOT / "src" / "egent"),
 )

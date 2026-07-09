@@ -9,9 +9,8 @@ import egent.builtin_tools.path_validator
 import egent.limits
 
 
-def _under_root(root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    root_glob = f"{root.resolve().as_posix()}/**"
-    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=(root_glob,))
+def _under_root(_root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
+    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",))
     return egent.builtin_tools.path_validator.PathPermissions(
         discoverable=allow_all,
         readable=allow_all,
@@ -24,11 +23,12 @@ def _reject_path_prefix(
     pattern: str,
 ) -> egent.builtin_tools.path_validator.PathPermissions:
     base = _under_root(root)
-    scoped_pattern = (
-        pattern
-        if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern)
-        else f"{root.resolve().as_posix()}/{pattern}"
-    )
+    if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern):
+        scoped_pattern = pattern
+    elif pattern.startswith("**/"):
+        scoped_pattern = pattern
+    else:
+        scoped_pattern = f"{root.resolve().as_posix()}/{pattern}"
 
     def with_blacklist(
         rule: egent.builtin_tools.path_validator.PathPermissionRule,

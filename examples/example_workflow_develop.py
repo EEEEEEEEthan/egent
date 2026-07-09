@@ -23,7 +23,7 @@ async def begin_develop_workflow(
 ) -> tuple[bool, str]:
     """运行开发工作流：编码与验收循环，直至通过或耗尽重试。
 
-    供程序内调用（如 todo 消化）；注册为 agent 工具请用 ``delegate_develop_workflow``。
+    供程序内调用；注册为 agent 工具请用 ``delegate_develop_workflow``。
 
     Args:
         description: 开发需求描述。

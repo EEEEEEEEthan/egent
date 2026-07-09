@@ -13,7 +13,6 @@ __all__ = [
     "PathPermissions",
     "get_list_path_permissions_tool",
     "is_absolute_path_pattern",
-    "matches_path_patterns",
     "path_matches_patterns",
     "resolve_path",
 ]
@@ -43,68 +42,12 @@ def is_absolute_path_pattern(pattern: str) -> bool:
     return len(normalized_pattern) >= 2 and normalized_pattern[1] == ":"
 
 
-def _normalize_absolute_pattern(pattern: str) -> str:
-    posix_pattern = pattern.replace("\\", "/")
-    glob_index = next(
-        (index for index, character in enumerate(posix_pattern) if character in "*?"),
-        len(posix_pattern),
-    )
-    path_prefix = posix_pattern[:glob_index].rstrip("/")
-    glob_suffix = posix_pattern[glob_index:]
-    if not path_prefix:
-        return posix_pattern
-    resolved_prefix = Path(path_prefix).resolve().as_posix()
-    if not glob_suffix:
-        return resolved_prefix
-    if glob_suffix.startswith("/"):
-        return f"{resolved_prefix}{glob_suffix}"
-    return f"{resolved_prefix}/{glob_suffix}"
-
-
-def matches_path_patterns(relative_text: str, patterns: tuple[str, ...]) -> bool:
-    """判断相对路径是否匹配任一 glob 模式（按路径前缀分段匹配）。"""
-    normalized_text = relative_text or "."
-    for pattern in patterns:
-        if PurePosixPath(normalized_text).full_match(pattern):
-            return True
-        if pattern.endswith("/**"):
-            directory_pattern = pattern[:-3]
-            if PurePosixPath(normalized_text).full_match(directory_pattern):
-                return True
-    path_segments = PurePosixPath(normalized_text).parts
-    for segment_count in range(1, len(path_segments) + 1):
-        path_prefix = PurePosixPath(*path_segments[:segment_count])
-        if any(path_prefix.full_match(pattern) for pattern in patterns):
-            return True
-    return False
-
-
 def path_matches_patterns(path: Path, patterns: tuple[str, ...]) -> bool:
-    """判断路径是否匹配任一 glob 模式。
-
-    绝对路径模式匹配解析后的绝对路径；相对模式匹配相对当前工作目录的路径。
-    """
+    """判断绝对路径是否匹配任一 glob 模式（pathlib match，从右向左）。"""
     if not patterns:
         return False
-    resolved_path = path.resolve()
-    absolute_posix = resolved_path.as_posix()
-    working_directory = Path.cwd().resolve()
-    try:
-        cwd_relative_posix = resolved_path.relative_to(working_directory).as_posix()
-    except ValueError:
-        cwd_relative_posix = None
-
-    for pattern in patterns:
-        if is_absolute_path_pattern(pattern):
-            normalized_pattern = _normalize_absolute_pattern(pattern)
-            if matches_path_patterns(absolute_posix, (normalized_pattern,)):
-                return True
-        elif cwd_relative_posix is not None and matches_path_patterns(
-            cwd_relative_posix,
-            (pattern,),
-        ):
-            return True
-    return False
+    absolute_path = PurePosixPath(path.resolve().as_posix())
+    return any(absolute_path.match(pattern) for pattern in patterns)
 
 
 @dataclass(frozen=True)
@@ -151,8 +94,10 @@ class PathPermissions:
 
     def format_rules(self) -> str:
         """格式化输出三项权限的白名单与黑名单。"""
-        working_directory_text = Path.cwd().resolve().as_posix()
-        lines = [f"工作目录: {working_directory_text}", ""]
+        lines = [
+            "匹配基准: 解析后的绝对路径",
+            "",
+        ]
         for permission_kind in ("discoverable", "readable", "editable"):
             rule = getattr(self, permission_kind)
             label = _PERMISSION_LABELS[permission_kind]
@@ -162,7 +107,7 @@ class PathPermissions:
             lines.append("")
         lines.append("目录搜索: 可发现且可读")
         lines.append("文件搜索: 可读")
-        lines.append("模式说明: 绝对路径匹配绝对路径；相对路径匹配相对工作目录的路径")
+        lines.append("模式说明: 使用 pathlib glob match；** 表示全路径")
         return "\n".join(lines)
 
 

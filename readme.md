@@ -93,7 +93,7 @@ python examples/example_agent.py
 
 `Agent` 通过 ``path_permissions`` 字段控制内置文件工具的路径权限；写入能力由 ``editable`` 白名单与黑名单决定。权限变化后下次 ``request()`` 会自动追加「路径权限已更新」system 消息（与工具集变更提示类似）。
 
-``examples/_common.py`` 中的 ``create_egent_path_permissions()`` 返回 ``PathPermissions``，用白名单与黑名单控制可发现、可读、可编辑；白名单与黑名单支持绝对路径 glob，或相对当前工作目录的相对路径 glob。目录搜索要求可发现且可读，文件搜索仅要求可读。``list_path_permissions`` 工具可列出当前规则。
+``examples/_common.py`` 中的 ``create_egent_path_permissions()`` 返回 ``PathPermissions``，用白名单与黑名单控制可发现、可读、可编辑；``**`` 白名单表示全路径放行，项目目录黑名单使用解析后的绝对路径。目录搜索要求可发现且可读，文件搜索仅要求可读。``list_path_permissions`` 工具可列出当前规则。
 
 ### 工作流
 
@@ -101,7 +101,6 @@ python examples/example_agent.py
 |------|------|
 | `example_agent.py` | 交互式 Agent CLI，集成所有工具 |
 | `example_workflow_develop.py` | 主管委派 → 编码 → 验收循环 |
-| `example_workflow_todo.py` | 逐条消化 todo 文件 |
 | `example_workflow_coding.py` | 编码实现 |
 | `example_workflow_review.py` | 代码验收 |
 
@@ -127,7 +126,6 @@ python examples/example_agent.py
 │   ├── _common.py           # 共享辅助代码（路径校验器等）
 │   ├── example_agent.py     # 交互式 Agent CLI
 │   ├── example_workflow_develop.py
-│   ├── example_workflow_todo.py
 │   ├── example_workflow_coding.py
 │   └── example_workflow_review.py
 ├── src/egent/               # 核心库
