@@ -60,6 +60,8 @@ def _configure_logging() -> None:
         _logger.setLevel(logging.INFO)
         _logger.addHandler(file_handler)
     _logger.propagate = False
+    for noisy_logger_name in ("httpx", "httpcore", "openai"):
+        logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
     egent.ephemeral_dirs.prune_oldest_files_in_directory(log_dir)
 
 
