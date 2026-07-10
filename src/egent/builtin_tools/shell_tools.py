@@ -23,12 +23,12 @@ def shell(
     @param block_until_ms 最长等待毫秒数，缺省 30000
     """
     if not command.strip():
-        return "错误：命令不能为空"
+        raise ValueError("命令不能为空")
     resolved_directory = (
         Path.cwd() if working_directory is None else Path(working_directory).resolve()
     )
     if not resolved_directory.is_dir():
-        return f"错误：目录不存在：{working_directory}"
+        raise FileNotFoundError(f"目录不存在：{working_directory}")
     run_kwargs = {
         "cwd": resolved_directory,
         "capture_output": True,
@@ -46,10 +46,8 @@ def shell(
             )
         else:
             completed = subprocess.run(command, shell=True, check=False, **run_kwargs)
-    except subprocess.TimeoutExpired:
-        return f"错误：命令执行超时（{block_until_ms}ms）"
-    except OSError as os_error:
-        return f"错误：执行命令失败：{os_error}"
+    except subprocess.TimeoutExpired as timeout_error:
+        raise TimeoutError(f"命令执行超时（{block_until_ms}ms）") from timeout_error
     return egent.builtin_tools.command_utils.format_command_result(
         completed.stdout, completed.stderr, completed.returncode
     )

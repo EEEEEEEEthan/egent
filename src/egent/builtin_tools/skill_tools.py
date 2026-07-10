@@ -15,26 +15,24 @@ __all__ = ["get_skill_tools"]
 def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallable]:
     """返回绑定到给定技能索引的工具函数列表。"""
 
-    def require_skill_dir(skill_id: str) -> tuple[Path | None, str | None]:
+    def require_skill_dir(skill_id: str) -> Path:
         skill_dir = skill_index.get(skill_id)
         if skill_dir is None:
             known = ", ".join(sorted(skill_index)) or "（无）"
-            return None, f"错误：未知技能 id：{skill_id}，已知：{known}"
+            raise ValueError(f"未知技能 id：{skill_id}，已知：{known}")
         if not skill_dir.is_dir():
-            return None, f"错误：技能目录不存在：{skill_dir}"
-        return skill_dir, None
+            raise FileNotFoundError(f"技能目录不存在：{skill_dir}")
+        return skill_dir
 
     def learn_skill(skill_id: str) -> str:
         """读取技能目录结构与 SKILL.md 全文。
 
         @param skill_id 技能 id
         """
-        skill_dir, error = require_skill_dir(skill_id)
-        if error:
-            return error
+        skill_dir = require_skill_dir(skill_id)
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.is_file():
-            return f"错误：技能目录缺少 SKILL.md：{skill_dir}"
+            raise FileNotFoundError(f"技能目录缺少 SKILL.md：{skill_dir}")
         tree_lines = [f"{skill_dir.name}/"]
         for path in sorted(skill_dir.rglob("*")):
             relative = path.relative_to(skill_dir)
@@ -48,19 +46,19 @@ def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallabl
             f"{skill_md.read_text(encoding='utf-8')}"
         )
 
-    def resolve_script(skill_dir: Path, script_relative_path: str) -> tuple[Path | None, str | None]:
+    def resolve_script(skill_dir: Path, script_relative_path: str) -> Path:
         relative = Path(script_relative_path)
         if relative.is_absolute():
-            return None, f"错误：脚本路径必须为相对路径：{script_relative_path}"
+            raise ValueError(f"脚本路径必须为相对路径：{script_relative_path}")
         resolved_skill_dir = skill_dir.resolve()
         script_path = (resolved_skill_dir / relative).resolve()
         try:
             script_path.relative_to(resolved_skill_dir)
-        except ValueError:
-            return None, f"错误：脚本路径越界：{script_relative_path}"
+        except ValueError as path_error:
+            raise ValueError(f"脚本路径越界：{script_relative_path}") from path_error
         if not script_path.is_file():
-            return None, f"错误：脚本不存在：{script_relative_path}"
-        return script_path, None
+            raise FileNotFoundError(f"脚本不存在：{script_relative_path}")
+        return script_path
 
     def run_skill_script(
         skill_id: str,
@@ -73,12 +71,8 @@ def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallabl
         @param script_relative_path 相对技能目录的脚本路径
         @param args 传给脚本的命令行参数
         """
-        skill_dir, error = require_skill_dir(skill_id)
-        if error:
-            return error
-        script_path, resolve_error = resolve_script(skill_dir, script_relative_path)
-        if resolve_error:
-            return resolve_error
+        skill_dir = require_skill_dir(skill_id)
+        script_path = resolve_script(skill_dir, script_relative_path)
         suffix = script_path.suffix.lower()
         if suffix == ".py":
             command = [sys.executable, str(script_path), *(args or [])]
@@ -89,19 +83,18 @@ def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallabl
         elif suffix in {".bat", ".cmd"}:
             command = [str(script_path), *(args or [])]
         else:
-            return f"错误：不支持的脚本类型：{script_path.suffix}"
-        try:
-            completed = subprocess.run(
-                command,
-                cwd=script_path.parent,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-            )
-        except OSError as os_error:
-            return f"错误：执行脚本失败：{os_error}"
-        return egent.builtin_tools.command_utils.format_command_result(completed.stdout, completed.stderr, completed.returncode)
+            raise ValueError(f"不支持的脚本类型：{script_path.suffix}")
+        completed = subprocess.run(
+            command,
+            cwd=script_path.parent,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        return egent.builtin_tools.command_utils.format_command_result(
+            completed.stdout, completed.stderr, completed.returncode
+        )
 
     return [learn_skill, run_skill_script]

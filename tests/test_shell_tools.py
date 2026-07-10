@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 import egent.builtin_tools.shell_tools
 import egent.limits
 
@@ -51,17 +53,15 @@ def test_shell_uses_working_directory(tmp_path: Path) -> None:
 
 
 def test_shell_rejects_missing_working_directory(tmp_path: Path) -> None:
-    """shell 在工作目录不存在时应返回错误。"""
-    result = egent.builtin_tools.shell_tools.shell("echo test", working_directory=str(tmp_path / "missing"))
-
-    assert "目录不存在" in result
+    """shell 在工作目录不存在时应抛出异常。"""
+    with pytest.raises(FileNotFoundError, match="目录不存在"):
+        egent.builtin_tools.shell_tools.shell("echo test", working_directory=str(tmp_path / "missing"))
 
 
 def test_shell_rejects_empty_command() -> None:
-    """shell 在命令为空时应返回错误。"""
-    result = egent.builtin_tools.shell_tools.shell("   ")
-
-    assert "命令不能为空" in result
+    """shell 在命令为空时应抛出异常。"""
+    with pytest.raises(ValueError, match="命令不能为空"):
+        egent.builtin_tools.shell_tools.shell("   ")
 
 
 def test_shell_reports_nonzero_exit_code() -> None:
@@ -78,10 +78,9 @@ def test_shell_reports_nonzero_exit_code() -> None:
 
 
 def test_shell_times_out() -> None:
-    """shell 在超时时应返回错误。"""
-    result = egent.builtin_tools.shell_tools.shell(_sleep_command(2), block_until_ms=200)
-
-    assert "超时" in result
+    """shell 在超时时应抛出异常。"""
+    with pytest.raises(TimeoutError, match="超时"):
+        egent.builtin_tools.shell_tools.shell(_sleep_command(2), block_until_ms=200)
 
 
 def test_shell_returns_full_output() -> None:

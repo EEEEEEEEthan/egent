@@ -38,7 +38,7 @@ def _run_git(args: list[str], working_directory: str | None = None) -> str:
         Path.cwd() if working_directory is None else Path(working_directory).resolve()
     )
     if not resolved_directory.is_dir():
-        return f"错误：目录不存在：{working_directory}"
+        raise FileNotFoundError(f"目录不存在：{working_directory}")
     try:
         completed = subprocess.run(
             cmd,
@@ -50,10 +50,8 @@ def _run_git(args: list[str], working_directory: str | None = None) -> str:
             errors="replace",
             check=False,
         )
-    except subprocess.TimeoutExpired:
-        return "错误：git 命令执行超时（30s）"
-    except OSError as os_error:
-        return f"错误：执行 git 命令失败：{os_error}"
+    except subprocess.TimeoutExpired as timeout_error:
+        raise TimeoutError("git 命令执行超时（30s）") from timeout_error
     return egent.builtin_tools.command_utils.format_command_result(
         completed.stdout, completed.stderr, completed.returncode
     )
@@ -247,8 +245,8 @@ def git_stash(action: str = "list", path: str | None = None) -> str:
     """
     valid_actions = {"list", "push", "pop", "drop", "apply"}
     if action not in valid_actions:
-        return (
-            f"错误：无效的 stash 操作 '{action}'，"
+        raise ValueError(
+            f"无效的 stash 操作 '{action}'，"
             f"支持的操作：{', '.join(sorted(valid_actions))}"
         )
     args = ["stash", action] if action != "list" else ["stash", "list"]

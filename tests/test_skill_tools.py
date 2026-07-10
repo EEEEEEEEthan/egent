@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 import egent.builtin_tools.skill_tools
 import egent.agent
 import egent.tool
@@ -78,7 +80,8 @@ def test_run_skill_script_only_allows_skill_directory(tmp_path) -> None:
 
     _, run_skill_script = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
 
-    assert "越界" in run_skill_script("demo", "../outside.py")
+    with pytest.raises(ValueError, match="越界"):
+        run_skill_script("demo", "../outside.py")
     assert "hello world" in run_skill_script("demo", "scripts/main.py", ["hello", "world"])
 
 

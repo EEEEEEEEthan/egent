@@ -32,62 +32,57 @@ __all__ = [
 ]
 
 
-def _read_utf8_text(resolved_path: Path, path_label: str) -> tuple[str | None, str | None]:
+def _read_utf8_text(resolved_path: Path, path_label: str) -> str:
     if not resolved_path.is_file():
-        return None, f"错误：文件不存在：{path_label}"
+        raise FileNotFoundError(f"文件不存在：{path_label}")
     try:
-        return resolved_path.read_text(encoding="utf-8"), None
-    except UnicodeDecodeError:
-        return None, f"错误：无法以 UTF-8 解码文件：{path_label}"
+        return resolved_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as decode_error:
+        raise ValueError(f"无法以 UTF-8 解码文件：{path_label}") from decode_error
 
 
 def _read_utf8_file(
     path_text: str,
     validator: egent.builtin_tools.path_validator.PathPermissions | None,
     may_access: Callable[[egent.builtin_tools.path_validator.PathPermissions, Path], bool],
-) -> tuple[Path | None, str | None, str | None]:
+) -> tuple[Path, str]:
     resolved_path = egent.builtin_tools.path_validator.resolve_path(path_text)
     if validator is not None and not may_access(validator, resolved_path):
-        return None, None, f"错误：没有权限访问路径：{path_text}"
-    content, error = _read_utf8_text(resolved_path, path_text)
-    if error:
-        return None, None, error
-    return resolved_path, content, None
+        raise PermissionError(f"没有权限访问路径：{path_text}")
+    return resolved_path, _read_utf8_text(resolved_path, path_text)
 
 
 def _resolve_scoped_path(
     path_text: str,
     validator: egent.builtin_tools.path_validator.PathPermissions | None,
-) -> tuple[Path | None, str | None]:
+) -> Path:
     resolved_path = egent.builtin_tools.path_validator.resolve_path(path_text)
     if validator is not None and not validator.is_editable(resolved_path):
-        return None, f"错误：没有权限访问路径：{path_text}"
-    return resolved_path, None
+        raise PermissionError(f"没有权限访问路径：{path_text}")
+    return resolved_path
 
 
 def _open_existing_file(
     path_text: str,
     validator: egent.builtin_tools.path_validator.PathPermissions | None,
-) -> tuple[Path | None, str | None]:
-    resolved_path, error = _resolve_scoped_path(path_text, validator)
-    if error:
-        return None, error
+) -> Path:
+    resolved_path = _resolve_scoped_path(path_text, validator)
     if not resolved_path.is_file():
-        return None, f"错误：文件不存在：{path_text}"
-    return resolved_path, None
+        raise FileNotFoundError(f"文件不存在：{path_text}")
+    return resolved_path
 
 
 def _open_directory(
     directory_text: str,
     validator: egent.builtin_tools.path_validator.PathPermissions | None,
-) -> tuple[Path | None, str | None]:
+) -> Path:
     directory_input = directory_text or "."
     root = egent.builtin_tools.path_validator.resolve_path(directory_input)
     if validator is not None and not validator.is_discoverable(root):
-        return None, f"错误：没有权限：{directory_input}"
+        raise PermissionError(f"没有权限：{directory_input}")
     if not root.is_dir():
-        return None, f"错误：目录不存在：{directory_input}"
-    return root, None
+        raise FileNotFoundError(f"目录不存在：{directory_input}")
+    return root
 
 
 def _slice_lines_from_position(
@@ -126,9 +121,7 @@ def get_walk_files_tool(
         directory: str,
         depth: int | None = None,
     ) -> str:
-        root, error = _open_directory(directory, validator)
-        if error:
-            return error
+        root = _open_directory(directory, validator)
         max_depth = depth if depth is not None else 1
         lines: list[str] = []
 
@@ -144,8 +137,7 @@ def get_walk_files_tool(
                     key=lambda path: (not path.is_dir(), path.name.lower())
                 )
             except OSError as os_error:
-                lines.append(f"警告：无法访问 {directory_path}：{os_error}")
-                return
+                raise OSError(f"无法访问 {directory_path}：{os_error}") from os_error
             visible_entries = [
                 entry_path
                 for entry_path in entries
@@ -187,7 +179,7 @@ def _search_file_content(
 ) -> str:
     """在单个可读文件中搜索正则匹配行并返回格式化结果。"""
     if validator is not None and not validator.is_readable(resolved):
-        return f"错误：没有权限搜索文件：{path_label}"
+        raise PermissionError(f"没有权限搜索文件：{path_label}")
     try:
         text = resolved.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
@@ -209,9 +201,7 @@ def _search_directory(
     file_filter: str | None,
 ) -> str:
     """在目录中递归搜索文件内容和文件名匹配。"""
-    root, error = _open_directory(directory, validator)
-    if error:
-        return error
+    root = _open_directory(directory, validator)
     lines: list[str] = []
     for file_path in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
         if not file_path.is_file():
@@ -257,7 +247,7 @@ def get_search_directory_tool(
         try:
             regex = re.compile(pattern)
         except re.error as regex_error:
-            return f"错误：无效的正则表达式：{regex_error}"
+            raise ValueError(f"无效的正则表达式：{regex_error}") from regex_error
         return _search_directory(directory, regex, validator, file_filter)
 
     search_directory.__name__ = name
@@ -288,10 +278,10 @@ def get_search_file_tool(
         try:
             regex = re.compile(pattern)
         except re.error as regex_error:
-            return f"错误：无效的正则表达式：{regex_error}"
+            raise ValueError(f"无效的正则表达式：{regex_error}") from regex_error
         resolved = egent.builtin_tools.path_validator.resolve_path(path)
         if not resolved.is_file():
-            return f"错误：文件不存在：{path}"
+            raise FileNotFoundError(f"文件不存在：{path}")
         return _search_file_content(resolved, regex, validator, path)
 
     search_file.__name__ = name
@@ -318,13 +308,11 @@ def get_read_file_tool(
         column: int | None = None,
         limit: int | None = None,
     ) -> str:
-        _, text, error = _read_utf8_file(
+        _, text = _read_utf8_file(
             path,
             validator,
             lambda path_validator, resolved_path: path_validator.is_readable(resolved_path),
         )
-        if error:
-            return error
         file_lines = text.splitlines(keepends=True)
         start_line = line or 1
         start_column = column or 1
@@ -370,17 +358,12 @@ def get_create_file_tool(
     tool_description = description or "创建新文件"
 
     def create_file(path: str, content: str) -> str:
-        resolved_path, error = _resolve_scoped_path(path, validator)
-        if error:
-            return error
+        resolved_path = _resolve_scoped_path(path, validator)
         if resolved_path.is_file():
-            return f"错误：文件已存在：{path}"
+            raise FileExistsError(f"文件已存在：{path}")
         if not resolved_path.parent.is_dir():
-            return f"错误：父目录不存在：{path}"
-        try:
-            resolved_path.write_text(content, encoding="utf-8")
-        except OSError as os_error:
-            return f"错误：创建文件失败：{path}：{os_error}"
+            raise FileNotFoundError(f"父目录不存在：{path}")
+        resolved_path.write_text(content, encoding="utf-8")
         return f"已创建文件：{resolved_path}"
 
     create_file.__name__ = name
@@ -402,14 +385,9 @@ def get_append_text_tool(
     tool_description = description or "向文件追加文本"
 
     def append_text(path: str, text: str) -> str:
-        resolved_path, error = _open_existing_file(path, validator)
-        if error:
-            return error
-        try:
-            with resolved_path.open("a", encoding="utf-8") as file_handle:
-                file_handle.write(text)
-        except OSError as os_error:
-            return f"错误：追加写入失败：{path}：{os_error}"
+        resolved_path = _open_existing_file(path, validator)
+        with resolved_path.open("a", encoding="utf-8") as file_handle:
+            file_handle.write(text)
         return f"已追加写入：{resolved_path}"
 
     append_text.__name__ = name
@@ -435,18 +413,16 @@ def get_apply_patch_tool(
         old_string: str,
         new_string: str,
     ) -> str:
-        resolved_path, original_text, error = _read_utf8_file(
+        resolved_path, original_text = _read_utf8_file(
             path,
             validator,
             lambda path_validator, resolved_path: path_validator.is_editable(resolved_path),
         )
-        if error:
-            return error
         match_count = original_text.count(old_string)
         if match_count == 0:
-            return f"错误：未找到要替换的文本：{path}"
+            raise ValueError(f"未找到要替换的文本：{path}")
         if match_count != 1:
-            return f"错误：找到 {match_count} 处匹配，请提供更多上下文：{path}"
+            raise ValueError(f"找到 {match_count} 处匹配，请提供更多上下文：{path}")
         updated_text = original_text.replace(old_string, new_string, 1)
         resolved_path.write_text(updated_text, encoding="utf-8")
         return f"已应用补丁：{resolved_path}"
@@ -471,24 +447,19 @@ def get_replace_tool(
     tool_description = description or "对文件内容执行正则表达式全量替换"
 
     def replace(path: str, pattern: str, replacement: str) -> str:
-        resolved_path, original_text, error = _read_utf8_file(
+        resolved_path, original_text = _read_utf8_file(
             path,
             validator,
             lambda path_validator, resolved_path: path_validator.is_editable(resolved_path),
         )
-        if error:
-            return error
         try:
             regex = re.compile(pattern)
         except re.error as regex_error:
-            return f"错误：无效的正则表达式：{regex_error}"
+            raise ValueError(f"无效的正则表达式：{regex_error}") from regex_error
         updated_text, match_count = regex.subn(replacement, original_text)
         if match_count == 0:
             return f"已替换 0 处：{resolved_path}"
-        try:
-            resolved_path.write_text(updated_text, encoding="utf-8")
-        except OSError as os_error:
-            return f"错误：写入文件失败：{path}：{os_error}"
+        resolved_path.write_text(updated_text, encoding="utf-8")
         return f"已替换 {match_count} 处：{resolved_path}"
 
     replace.__name__ = name
@@ -511,15 +482,10 @@ def get_rewrite_tool(
     tool_description = description or "重新写入整个文件（覆盖已有或创建新文件）"
 
     def rewrite(path: str, content: str) -> str:
-        resolved_path, error = _resolve_scoped_path(path, validator)
-        if error:
-            return error
-        try:
-            if not resolved_path.parent.is_dir():
-                resolved_path.parent.mkdir(parents=True, exist_ok=True)
-            resolved_path.write_text(content, encoding="utf-8")
-        except OSError as os_error:
-            return f"错误：写入文件失败：{path}：{os_error}"
+        resolved_path = _resolve_scoped_path(path, validator)
+        if not resolved_path.parent.is_dir():
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_path.write_text(content, encoding="utf-8")
         return f"已写入文件：{resolved_path}"
 
     rewrite.__name__ = name
@@ -541,21 +507,16 @@ def get_delete_tool(
     tool_description = description or "删除文件或目录（递归删除目录）"
 
     def delete(path: str) -> str:
-        resolved_path, error = _resolve_scoped_path(path, validator)
-        if error:
-            return error
+        resolved_path = _resolve_scoped_path(path, validator)
         if not resolved_path.exists():
-            return f"错误：路径不存在：{path}"
-        try:
-            if resolved_path.is_file():
-                resolved_path.unlink()
-                return f"已删除文件：{resolved_path}"
-            if resolved_path.is_dir():
-                shutil.rmtree(resolved_path)
-                return f"已删除目录：{resolved_path}"
-            return f"错误：路径不是文件也不是目录：{path}"
-        except OSError as os_error:
-            return f"错误：删除失败：{path}：{os_error}"
+            raise FileNotFoundError(f"路径不存在：{path}")
+        if resolved_path.is_file():
+            resolved_path.unlink()
+            return f"已删除文件：{resolved_path}"
+        if resolved_path.is_dir():
+            shutil.rmtree(resolved_path)
+            return f"已删除目录：{resolved_path}"
+        raise ValueError(f"路径不是文件也不是目录：{path}")
 
     delete.__name__ = name
     delete.__doc__ = (

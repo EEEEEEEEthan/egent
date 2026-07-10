@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import egent.builtin_tools.file_system_tools
 import egent.builtin_tools.path_validator
 
@@ -77,14 +79,13 @@ def test_create_file_accepts_relative_path(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_create_file_rejects_existing_file(tmp_path: Path) -> None:
-    """create_file 在文件已存在时应返回错误。"""
+    """create_file 在文件已存在时应抛出异常。"""
     sample_file = tmp_path / "notes.txt"
     sample_file.write_text("old", encoding="utf-8")
     create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_under_root(tmp_path))
 
-    result = create_file(str(sample_file), "new")
-
-    assert "文件已存在" in result
+    with pytest.raises(FileExistsError, match="文件已存在"):
+        create_file(str(sample_file), "new")
     assert sample_file.read_text(encoding="utf-8") == "old"
 
 
@@ -93,9 +94,8 @@ def test_create_file_respects_validator(tmp_path: Path) -> None:
     target_file = tmp_path / "secret" / "hidden.txt"
     create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = create_file(str(target_file), "secret")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        create_file(str(target_file), "secret")
     assert not target_file.exists()
 
 
@@ -131,12 +131,11 @@ def test_append_text_appends_content(tmp_path: Path) -> None:
 
 
 def test_append_text_missing_file(tmp_path: Path) -> None:
-    """append_text 在文件不存在时应返回错误。"""
+    """append_text 在文件不存在时应抛出异常。"""
     append_text = egent.builtin_tools.file_system_tools.get_append_text_tool(_under_root(tmp_path))
 
-    result = append_text(str(tmp_path / "missing.txt"), "text")
-
-    assert "文件不存在" in result
+    with pytest.raises(FileNotFoundError, match="文件不存在"):
+        append_text(str(tmp_path / "missing.txt"), "text")
 
 
 def test_append_text_respects_validator(tmp_path: Path) -> None:
@@ -147,9 +146,8 @@ def test_append_text_respects_validator(tmp_path: Path) -> None:
     sample_file.write_text("keep", encoding="utf-8")
     append_text = egent.builtin_tools.file_system_tools.get_append_text_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = append_text(str(sample_file), "more")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        append_text(str(sample_file), "more")
     assert sample_file.read_text(encoding="utf-8") == "keep"
 
 
@@ -166,14 +164,13 @@ def test_apply_patch_replaces_single_match(tmp_path: Path) -> None:
 
 
 def test_apply_patch_rejects_ambiguous_match(tmp_path: Path) -> None:
-    """apply_patch 在多处匹配时应返回错误。"""
+    """apply_patch 在多处匹配时应抛出异常。"""
     sample_file = tmp_path / "alpha.txt"
     sample_file.write_text("foo\nfoo\n", encoding="utf-8")
     apply_patch = egent.builtin_tools.file_system_tools.get_apply_patch_tool(_under_root(tmp_path))
 
-    result = apply_patch(str(sample_file), "foo", "bar")
-
-    assert "找到 2 处匹配" in result
+    with pytest.raises(ValueError, match="找到 2 处匹配"):
+        apply_patch(str(sample_file), "foo", "bar")
     assert sample_file.read_text(encoding="utf-8") == "foo\nfoo\n"
 
 
@@ -185,9 +182,8 @@ def test_apply_patch_respects_validator(tmp_path: Path) -> None:
     sample_file.write_text("secret", encoding="utf-8")
     apply_patch = egent.builtin_tools.file_system_tools.get_apply_patch_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = apply_patch(str(sample_file), "secret", "public")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        apply_patch(str(sample_file), "secret", "public")
     assert sample_file.read_text(encoding="utf-8") == "secret"
 
 
@@ -212,16 +208,20 @@ def test_edit_tools_share_validator(tmp_path: Path) -> None:
     assert notes_file.read_text(encoding="utf-8") == "hi world"
 
     # 验证新工具也共用同一 validator
-    assert "没有权限" in create_file(str(tmp_path / "secret" / "hidden.txt"), "secret")
+    with pytest.raises(PermissionError, match="没有权限"):
+        create_file(str(tmp_path / "secret" / "hidden.txt"), "secret")
 
     # replace 工具也受 validator 限制
-    assert "没有权限" in replace(str(tmp_path / "secret" / "hidden.txt"), "x", "y")
+    with pytest.raises(PermissionError, match="没有权限"):
+        replace(str(tmp_path / "secret" / "hidden.txt"), "x", "y")
 
     # rewrite 工具也受 validator 限制
-    assert "没有权限" in rewrite(str(tmp_path / "secret" / "hidden.txt"), "data")
+    with pytest.raises(PermissionError, match="没有权限"):
+        rewrite(str(tmp_path / "secret" / "hidden.txt"), "data")
 
     # delete 工具也受 validator 限制
-    assert "没有权限" in delete(str(tmp_path / "secret" / "hidden.txt"))
+    with pytest.raises(PermissionError, match="没有权限"):
+        delete(str(tmp_path / "secret" / "hidden.txt"))
 
 # ==================== replace_tool 测试 ====================
 
@@ -262,14 +262,13 @@ def test_replace_zero_matches(tmp_path: Path) -> None:
 
 
 def test_replace_invalid_regex(tmp_path: Path) -> None:
-    """replace 在正则无效时应返回错误。"""
+    """replace 在正则无效时应抛出异常。"""
     sample_file = tmp_path / "text.txt"
     sample_file.write_text("hello", encoding="utf-8")
     replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
 
-    result = replace(str(sample_file), r"[invalid", "x")
-
-    assert "无效的正则表达式" in result
+    with pytest.raises(ValueError, match="无效的正则表达式"):
+        replace(str(sample_file), r"[invalid", "x")
     assert sample_file.read_text(encoding="utf-8") == "hello"
 
 
@@ -281,19 +280,17 @@ def test_replace_respects_validator(tmp_path: Path) -> None:
     sample_file.write_text("secret", encoding="utf-8")
     replace = egent.builtin_tools.file_system_tools.get_replace_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = replace(str(sample_file), r"secret", "public")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        replace(str(sample_file), r"secret", "public")
     assert sample_file.read_text(encoding="utf-8") == "secret"
 
 
 def test_replace_missing_file(tmp_path: Path) -> None:
-    """replace 在文件不存在时应返回错误。"""
+    """replace 在文件不存在时应抛出异常。"""
     replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
 
-    result = replace(str(tmp_path / "missing.txt"), r"x", "y")
-
-    assert "文件不存在" in result
+    with pytest.raises(FileNotFoundError, match="文件不存在"):
+        replace(str(tmp_path / "missing.txt"), r"x", "y")
 
 
 def test_replace_relative_path(tmp_path: Path, monkeypatch) -> None:
@@ -349,9 +346,8 @@ def test_rewrite_respects_validator(tmp_path: Path) -> None:
     """rewrite 应拒绝 validator 不允许的路径。"""
     rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = rewrite(str(tmp_path / "secret" / "hidden.txt"), "data")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        rewrite(str(tmp_path / "secret" / "hidden.txt"), "data")
     assert not (tmp_path / "secret").exists()
 
 
@@ -397,12 +393,11 @@ def test_delete_directory(tmp_path: Path) -> None:
 
 
 def test_delete_nonexistent_path(tmp_path: Path) -> None:
-    """delete 在路径不存在时应返回错误。"""
+    """delete 在路径不存在时应抛出异常。"""
     delete = egent.builtin_tools.file_system_tools.get_delete_tool(_under_root(tmp_path))
 
-    result = delete(str(tmp_path / "nonexistent"))
-
-    assert "路径不存在" in result
+    with pytest.raises(FileNotFoundError, match="路径不存在"):
+        delete(str(tmp_path / "nonexistent"))
 
 
 def test_delete_respects_validator(tmp_path: Path) -> None:
@@ -413,7 +408,6 @@ def test_delete_respects_validator(tmp_path: Path) -> None:
     sample_file.write_text("secret", encoding="utf-8")
     delete = egent.builtin_tools.file_system_tools.get_delete_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = delete(str(sample_file))
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        delete(str(sample_file))
     assert sample_file.exists()

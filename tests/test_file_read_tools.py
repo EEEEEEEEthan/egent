@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import egent.builtin_tools.file_system_tools
 import egent.builtin_tools.path_validator
 import egent.limits
@@ -82,13 +84,12 @@ def test_read_file_with_column(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_read_file_missing(tmp_path: Path, monkeypatch) -> None:
-    """read_file 在文件不存在时应返回错误信息。"""
+    """read_file 在文件不存在时应抛出异常。"""
     monkeypatch.chdir(tmp_path)
     read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
 
-    result = read_file("missing.txt")
-
-    assert "文件不存在" in result
+    with pytest.raises(FileNotFoundError, match="文件不存在"):
+        read_file("missing.txt")
 
 
 def test_read_file_truncates_long_content(tmp_path: Path, monkeypatch) -> None:
@@ -217,9 +218,8 @@ def test_read_file_respects_validator(tmp_path: Path, monkeypatch) -> None:
     secret_file.write_text("secret", encoding="utf-8")
     read_file_tool = egent.builtin_tools.file_system_tools.get_read_file_tool(_reject_path_prefix(tmp_path, "secret/*"))
 
-    result = read_file_tool("secret/hidden.txt")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        read_file_tool("secret/hidden.txt")
 
 
 def test_search_directory_matches_line_content(tmp_path: Path, monkeypatch) -> None:
@@ -265,13 +265,12 @@ def test_search_directory_respects_validator(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_search_directory_invalid_regex(tmp_path: Path, monkeypatch) -> None:
-    """search_directory 在正则无效时应返回错误信息。"""
+    """search_directory 在正则无效时应抛出异常。"""
     monkeypatch.chdir(tmp_path)
     search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
 
-    result = search_directory("(")
-
-    assert "无效的正则表达式" in result
+    with pytest.raises(ValueError, match="无效的正则表达式"):
+        search_directory("(")
 
 
 def test_search_file_matches_line_content(tmp_path: Path, monkeypatch) -> None:
@@ -309,9 +308,8 @@ def test_search_file_respects_readable_permission(tmp_path: Path, monkeypatch) -
     search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(
         _reject_path_prefix(tmp_path, "secret/*"),
     )
-    result = search_file("classified", path="secret/private.txt")
-
-    assert "没有权限" in result
+    with pytest.raises(PermissionError, match="没有权限"):
+        search_file("classified", path="secret/private.txt")
 
 
 def test_search_file_allows_readable_but_not_discoverable(tmp_path: Path, monkeypatch) -> None:
