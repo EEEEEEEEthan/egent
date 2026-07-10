@@ -347,7 +347,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                     )
                     await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
             message = completion.choices[0].message
-            reply_text = message.content.strip() or ""
+            reply_text = (message.content or "").strip()
             tool_calls = message.tool_calls or []
             if not tool_calls:
                 self.__add_message("assistant", reply_text)
