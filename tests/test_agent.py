@@ -109,13 +109,13 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
 
     permissions = egent.builtin_tools.path_validator.PathPermissions(
         discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("**",),
+            whitelist=("*",),
         ),
         readable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("**",),
+            whitelist=("*",),
         ),
         editable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("**",),
+            whitelist=("*",),
         ),
     )
     agent = egent.agent.Agent("test")
@@ -145,14 +145,14 @@ async def test_request_notifies_path_permissions_change(monkeypatch) -> None:
     def make_permissions(blacklist: tuple[str, ...]) -> egent.builtin_tools.path_validator.PathPermissions:
         return egent.builtin_tools.path_validator.PathPermissions(
             discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("**",),
+                whitelist=("*",),
             ),
             readable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("**",),
+                whitelist=("*",),
                 blacklist=blacklist,
             ),
             editable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("**",),
+                whitelist=("*",),
             ),
         )
 
@@ -192,7 +192,7 @@ async def test_request_notifies_path_permissions_change(monkeypatch) -> None:
     )
 
     await agent.request()
-    agent.path_permissions = make_permissions(("secret/**",))
+    agent.path_permissions = make_permissions(("secret/*",))
     await agent.request()
 
     system_messages = [

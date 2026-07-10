@@ -9,7 +9,7 @@ import egent.builtin_tools.path_validator
 
 
 def _under_root(_root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",))
+    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("*",))
     return egent.builtin_tools.path_validator.PathPermissions(
         discoverable=allow_all,
         readable=allow_all,
@@ -18,7 +18,7 @@ def _under_root(_root: Path) -> egent.builtin_tools.path_validator.PathPermissio
 
 
 def _under_roots(*roots: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    whitelist = tuple(f"{root.resolve().as_posix()}/**" for root in roots)
+    whitelist = tuple(f"{root.resolve().as_posix()}/*" for root in roots)
     rule = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=whitelist)
     return egent.builtin_tools.path_validator.PathPermissions(
         discoverable=rule,
@@ -34,7 +34,7 @@ def _reject_path_prefix(
     base = _under_root(root)
     if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern):
         scoped_pattern = pattern
-    elif pattern.startswith("**/"):
+    elif pattern.startswith("*/"):
         scoped_pattern = pattern
     else:
         scoped_pattern = f"{root.resolve().as_posix()}/{pattern}"

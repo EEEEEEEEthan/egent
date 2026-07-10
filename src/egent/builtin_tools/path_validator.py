@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import fnmatch
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Literal
 
 import egent.tool
@@ -35,7 +36,7 @@ def resolve_path(path_text: str) -> Path:
 
 
 def is_absolute_path_pattern(pattern: str) -> bool:
-    """判断 glob 模式是否以绝对路径为基准。"""
+    """判断 fnmatch 模式是否以绝对路径为基准。"""
     normalized_pattern = pattern.replace("\\", "/")
     if normalized_pattern.startswith("/"):
         return True
@@ -43,11 +44,14 @@ def is_absolute_path_pattern(pattern: str) -> bool:
 
 
 def path_matches_patterns(path: Path, patterns: tuple[str, ...]) -> bool:
-    """判断绝对路径是否匹配任一 glob 模式（pathlib match，从右向左）。"""
+    """判断绝对路径是否匹配任一 fnmatch 模式（全路径匹配，* 可跨越路径分隔符）。"""
     if not patterns:
         return False
-    absolute_path = PurePosixPath(path.resolve().as_posix())
-    return any(absolute_path.match(pattern) for pattern in patterns)
+    absolute_path = path.resolve().as_posix()
+    return any(
+        fnmatch.fnmatch(absolute_path, pattern.replace("\\", "/"))
+        for pattern in patterns
+    )
 
 
 @dataclass(frozen=True)
@@ -107,7 +111,7 @@ class PathPermissions:
             lines.append("")
         lines.append("目录搜索: 可发现且可读")
         lines.append("文件搜索: 可读")
-        lines.append("模式说明: 使用 pathlib glob match；** 表示全路径")
+        lines.append("模式说明: 使用 fnmatch 全路径匹配；* 可跨越路径分隔符")
         return "\n".join(lines)
 
 

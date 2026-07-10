@@ -10,7 +10,7 @@ import egent.limits
 
 
 def _under_root(_root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
-    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("**",))
+    allow_all = egent.builtin_tools.path_validator.PathPermissionRule(whitelist=("*",))
     return egent.builtin_tools.path_validator.PathPermissions(
         discoverable=allow_all,
         readable=allow_all,
@@ -25,7 +25,7 @@ def _reject_path_prefix(
     base = _under_root(root)
     if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern):
         scoped_pattern = pattern
-    elif pattern.startswith("**/"):
+    elif pattern.startswith("*/"):
         scoped_pattern = pattern
     else:
         scoped_pattern = f"{root.resolve().as_posix()}/{pattern}"
@@ -177,7 +177,7 @@ def test_walk_files_hides_git_with_glob_pattern(tmp_path: Path, monkeypatch) -> 
     (git_directory / "HEAD").write_text("ref", encoding="utf-8")
     (tmp_path / "README.md").write_text("readme", encoding="utf-8")
 
-    walk_files = egent.builtin_tools.file_system_tools.get_walk_files_tool(_reject_path_prefix(tmp_path, "**/.git"))
+    walk_files = egent.builtin_tools.file_system_tools.get_walk_files_tool(_reject_path_prefix(tmp_path, "*/.git"))
     result = walk_files(".", depth=0)
 
     assert "README.md" in result
@@ -189,13 +189,17 @@ def _reject_discoverable_only(
     pattern: str,
 ) -> egent.builtin_tools.path_validator.PathPermissions:
     base = _under_root(root)
+    if egent.builtin_tools.path_validator.is_absolute_path_pattern(pattern):
+        scoped_pattern = pattern
+    else:
+        scoped_pattern = f"{root.resolve().as_posix()}/{pattern}"
 
     def with_blacklist(
         rule: egent.builtin_tools.path_validator.PathPermissionRule,
     ) -> egent.builtin_tools.path_validator.PathPermissionRule:
         return egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=rule.whitelist,
-            blacklist=rule.blacklist + (pattern,),
+            blacklist=rule.blacklist + (scoped_pattern,),
         )
 
     return egent.builtin_tools.path_validator.PathPermissions(

@@ -8,16 +8,17 @@ from collections.abc import Awaitable, Callable
 
 import egent.builtin_tools.path_validator
 
+# fnmatch 全路径匹配模式，* 可跨越路径分隔符
 _SENSITIVE_PATTERNS: tuple[str, ...] = (
-    "**/.model.toml",
+    "*/.model.toml",
 )
 
 _DISCOVERABLE_BLACKLIST_PATTERNS: tuple[str, ...] = (
-    "**/.git",
-    "**/*.pyc",
-    "**/.pytest_cache",
-    "**/.ruff_cache",
-    "**/__pycache__",
+    "*/.git",
+    "*.pyc",
+    "*/.pytest_cache",
+    "*/.ruff_cache",
+    "*/__pycache__",
 )
 
 _READABLE_BLACKLIST_PATTERNS: tuple[str, ...] = _SENSITIVE_PATTERNS
@@ -27,15 +28,15 @@ def create_egent_path_permissions() -> egent.builtin_tools.path_validator.PathPe
     """示例用路径权限：工作目录内可发现，敏感文件禁读写，噪声路径不可发现。"""
     return egent.builtin_tools.path_validator.PathPermissions(
         discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("**",),
+            whitelist=("*",),
             blacklist=_DISCOVERABLE_BLACKLIST_PATTERNS,
         ),
         readable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("**",),
+            whitelist=("*",),
             blacklist=_READABLE_BLACKLIST_PATTERNS,
         ),
         editable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("**",),
+            whitelist=("*",),
             blacklist=_READABLE_BLACKLIST_PATTERNS,
         ),
     )
