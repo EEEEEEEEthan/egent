@@ -150,11 +150,12 @@ class ToolCallStarted(AgentEvent):
 
 @dataclass(frozen=True)
 class ToolCallExecuted(AgentEvent):
-    """工具调用已执行并写回结果。"""
+    """工具调用已执行并写回结果。is_exception 为真时 result 为异常内容。"""
 
     name: str
     arguments: str
     result: str
+    is_exception: bool = False
 
 
 @dataclass(frozen=True)
@@ -361,6 +362,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 function_name = tool_call.function.name
                 function_arguments = tool_call.function.arguments
                 self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
+                is_exception = False
                 try:
                     handler = tool_handlers.get(function_name)
                     if handler is None:
@@ -370,11 +372,13 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                         handler_result = await handler_result
                 except Exception as exception:  # pylint: disable=broad-exception-caught
                     handler_result = str(exception)
+                    is_exception = True
                 tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
                 self.__emit_event(ToolCallExecuted(
                     name=function_name,
                     arguments=function_arguments,
                     result=tool_message["content"],
+                    is_exception=is_exception,
                 ))
 
     async def request_submit(
