@@ -47,7 +47,7 @@ def test_build_skills_catalog_includes_descriptions(tmp_path) -> None:
 
 
 def test_learn_skill_outputs_tree_and_skill_md(tmp_path) -> None:
-    """learn_skill 应先输出目录结构再输出 SKILL.md。"""
+    """learn_skill 缺省应先输出目录结构再输出 SKILL.md。"""
     skill_dir = tmp_path / "demo"
     _write_skill(skill_dir, "demo", "演示技能", extra="正文")
     (skill_dir / "scripts").mkdir()
@@ -62,6 +62,35 @@ def test_learn_skill_outputs_tree_and_skill_md(tmp_path) -> None:
     assert "scripts/run.py" in result
     assert "演示技能" in result
     assert "正文" in result
+
+
+def test_learn_skill_reads_relative_file(tmp_path) -> None:
+    """learn_skill 指定相对路径时应只返回该文件内容。"""
+    skill_dir = tmp_path / "demo"
+    _write_skill(skill_dir, "demo", "演示技能")
+    rules = skill_dir / "rules"
+    rules.mkdir()
+    (rules / "detail.md").write_text("# 细则\n禁止缩写\n", encoding="utf-8")
+
+    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    result = learn_skill("demo", "rules/detail.md")
+
+    assert result.startswith("# 技能文件: demo/rules/detail.md")
+    assert "禁止缩写" in result
+    assert "演示技能" not in result
+    assert "# SKILL.md" not in result
+
+
+def test_learn_skill_rejects_path_escape(tmp_path) -> None:
+    """learn_skill 不得读出技能目录外的文件。"""
+    skill_dir = tmp_path / "demo"
+    _write_skill(skill_dir, "demo", "演示")
+    outside = tmp_path / "secret.md"
+    outside.write_text("secret\n", encoding="utf-8")
+
+    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    with pytest.raises(ValueError, match="越界"):
+        learn_skill("demo", "../secret.md")
 
 
 def test_run_skill_script_only_allows_skill_directory(tmp_path) -> None:
@@ -121,6 +150,9 @@ def test_skill_tools_register_with_resolve_tools(tmp_path) -> None:
         "learn_skill",
         "run_skill_script",
     }
+    learn_schema = next(tool for tool in api_tools if tool["function"]["name"] == "learn_skill")
+    assert learn_schema["function"]["parameters"]["properties"]["relative_path"]["default"] == "SKILL.md"
     handler = egent.tool.tool_handler_from_function(tools[0])
     result = handler(json.dumps({"skill_id": "demo"}))
     assert "演示" in result
+    assert "# SKILL.md" in result

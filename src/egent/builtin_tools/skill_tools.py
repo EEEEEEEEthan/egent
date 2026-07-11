@@ -11,6 +11,8 @@ import egent.tool
 
 __all__ = ["get_skill_tools"]
 
+_SKILL_ENTRY_NAME = "SKILL.md"
+
 
 def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallable]:
     """返回绑定到给定技能索引的工具函数列表。"""
@@ -24,15 +26,33 @@ def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallabl
             raise FileNotFoundError(f"技能目录不存在：{skill_dir}")
         return skill_dir
 
-    def learn_skill(skill_id: str) -> str:
-        """读取技能目录结构与 SKILL.md 全文。
+    def resolve_under_skill(skill_dir: Path, relative_path: str) -> Path:
+        relative = Path(relative_path)
+        if relative.is_absolute():
+            raise ValueError(f"路径必须为相对路径：{relative_path}")
+        resolved_skill_dir = skill_dir.resolve()
+        target_path = (resolved_skill_dir / relative).resolve()
+        try:
+            target_path.relative_to(resolved_skill_dir)
+        except ValueError as path_error:
+            raise ValueError(f"路径越界：{relative_path}") from path_error
+        return target_path
+
+    def learn_skill(skill_id: str, relative_path: str = _SKILL_ENTRY_NAME) -> str:
+        """读取技能目录下的文件；缺省为 SKILL.md（附目录树）。
 
         @param skill_id 技能 id
+        @param relative_path 相对技能目录的文件路径，默认 SKILL.md
         """
         skill_dir = require_skill_dir(skill_id)
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.is_file():
-            raise FileNotFoundError(f"技能目录缺少 SKILL.md：{skill_dir}")
+        file_path = resolve_under_skill(skill_dir, relative_path)
+        if not file_path.is_file():
+            raise FileNotFoundError(f"文件不存在：{relative_path}")
+        content = file_path.read_text(encoding="utf-8")
+        display_path = Path(relative_path).as_posix()
+        skill_entry = skill_dir.resolve() / _SKILL_ENTRY_NAME
+        if file_path != skill_entry:
+            return f"# 技能文件: {skill_id}/{display_path}\n\n{content}"
         tree_lines = [f"{skill_dir.name}/"]
         for path in sorted(skill_dir.rglob("*")):
             relative = path.relative_to(skill_dir)
@@ -42,23 +62,9 @@ def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallabl
         return (
             f"# 技能目录: {skill_id}\n\n"
             f"{'\n'.join(tree_lines)}\n\n"
-            f"# SKILL.md\n\n"
-            f"{skill_md.read_text(encoding='utf-8')}"
+            f"# {_SKILL_ENTRY_NAME}\n\n"
+            f"{content}"
         )
-
-    def resolve_script(skill_dir: Path, script_relative_path: str) -> Path:
-        relative = Path(script_relative_path)
-        if relative.is_absolute():
-            raise ValueError(f"脚本路径必须为相对路径：{script_relative_path}")
-        resolved_skill_dir = skill_dir.resolve()
-        script_path = (resolved_skill_dir / relative).resolve()
-        try:
-            script_path.relative_to(resolved_skill_dir)
-        except ValueError as path_error:
-            raise ValueError(f"脚本路径越界：{script_relative_path}") from path_error
-        if not script_path.is_file():
-            raise FileNotFoundError(f"脚本不存在：{script_relative_path}")
-        return script_path
 
     def run_skill_script(
         skill_id: str,
@@ -72,7 +78,9 @@ def get_skill_tools(skill_index: dict[str, Path]) -> list[egent.tool.ToolCallabl
         @param args 传给脚本的命令行参数
         """
         skill_dir = require_skill_dir(skill_id)
-        script_path = resolve_script(skill_dir, script_relative_path)
+        script_path = resolve_under_skill(skill_dir, script_relative_path)
+        if not script_path.is_file():
+            raise FileNotFoundError(f"脚本不存在：{script_relative_path}")
         suffix = script_path.suffix.lower()
         if suffix == ".py":
             command = [sys.executable, str(script_path), *(args or [])]

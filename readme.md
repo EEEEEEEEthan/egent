@@ -79,7 +79,7 @@ python examples/example_agent.py
 
 | 工具 | 说明 |
 |------|------|
-| `learn_skill` | 查看技能详情 |
+| `learn_skill` | 读取技能文件；缺省 `SKILL.md`（附目录树），可传相对路径读其他文件 |
 | `run_skill_script` | 运行技能脚本 |
 
 ### 技能系统
