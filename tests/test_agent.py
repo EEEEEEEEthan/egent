@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 import httpx
+import pydantic
 from openai import APIStatusError
 
 import egent.agent
@@ -201,3 +202,97 @@ async def test_request_notifies_path_permissions_change(monkeypatch) -> None:
         if message.get("role") == "system" and isinstance(message.get("content"), str)
     ]
     assert any("路径权限已更新" in message for message in system_messages)
+
+
+@pytest.mark.asyncio
+async def test_fetch_chat_completion_falls_back_on_tool_argument_validation_error(
+    monkeypatch,
+) -> None:
+    """流式工具参数解析失败时应回退为非流式请求。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+
+    agent = egent.agent.Agent("test")
+    agent.add_message("user", "read foo")
+
+    class BrokenStream:
+        """模拟 OpenAI SDK 在 tool arguments 校验阶段抛错。"""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self) -> None:
+            raise pydantic.ValidationError.from_exception_data(
+                "read_fileArguments",
+                [
+                    pydantic_core_init_error(
+                        "limit",
+                        "Input should be a valid integer",
+                        "int_parsing",
+                        "null",
+                    ),
+                ],
+            )
+
+    create_calls: list[dict[str, object]] = []
+
+    async def fake_create(**kwargs: object) -> SimpleNamespace:
+        create_calls.append(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="fallback text",
+                        tool_calls=None,
+                    ),
+                ),
+            ],
+        )
+
+    monkeypatch.setattr(
+        agent._Agent__client.chat.completions,
+        "stream",
+        lambda **_kwargs: BrokenStream(),
+    )
+    monkeypatch.setattr(
+        agent._Agent__client.chat.completions,
+        "create",
+        fake_create,
+    )
+
+    text_deltas: list[str] = []
+    agent.add_listener(lambda event: text_deltas.append(event.text) if hasattr(event, "text") else None)
+
+    completion = await agent._Agent__fetch_chat_completion([])
+
+    assert len(create_calls) == 1
+    assert completion.choices[0].message.content == "fallback text"
+    assert text_deltas == ["fallback text"]
+
+
+def pydantic_core_init_error(
+    loc: str,
+    message: str,
+    error_type: str,
+    input_value: object,
+) -> dict[str, object]:
+    """构造 ValidationError.from_exception_data 所需的 error dict。"""
+    return {
+        "type": error_type,
+        "loc": (loc,),
+        "msg": message,
+        "input": input_value,
+        "url": "https://errors.pydantic.dev/2.13/v/int_parsing",
+    }

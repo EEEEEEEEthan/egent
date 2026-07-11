@@ -17,10 +17,23 @@ from openai.types.chat.chat_completion_tool_union_param import (
 ToolCallable = Callable[..., Any]
 ToolHandler = Callable[[str], str | Awaitable[str]]
 
+_NULL_LITERAL_STRINGS = frozenset({"null", "none", "undefined"})
+
 _PARAM_PATTERN = re.compile(
     r"^\s*@param\s+(\w+)\s*:?\s*(.+)$",
     re.MULTILINE,
 )
+
+def sanitize_tool_arguments_json(arguments_json: str) -> str:
+    """修正模型常见的 tool arguments JSON 瑕疵（如可选参数写成字符串 \"null\"）。"""
+    try:
+        parsed_arguments = json.loads(arguments_json)
+    except json.JSONDecodeError:
+        return arguments_json
+    if not isinstance(parsed_arguments, dict):
+        return arguments_json
+    return json.dumps(_sanitize_json_value(parsed_arguments), ensure_ascii=False)
+
 
 def tool_from_function(function: ToolCallable) -> ChatCompletionToolUnionParam:
     """把带类型标注与文档注释的函数编成 Chat Completions 工具 schema。"""
@@ -37,7 +50,9 @@ def tool_handler_from_function(function: ToolCallable) -> ToolHandler:
     arguments_model = _create_arguments_model(function)
 
     def handler(arguments_json: str) -> str | Awaitable[str]:
-        arguments = arguments_model.model_validate_json(arguments_json)
+        arguments = arguments_model.model_validate_json(
+            sanitize_tool_arguments_json(arguments_json),
+        )
         result = function(**arguments.model_dump())
         if inspect.isawaitable(result):
             return _format_awaitable_result(result)
@@ -132,6 +147,16 @@ def _parse_docstring(
     ]
     summary = "\n".join(summary_lines).strip() or None
     return summary, parameter_descriptions
+
+def _sanitize_json_value(value: Any) -> Any:
+    if isinstance(value, str) and value.lower() in _NULL_LITERAL_STRINGS:
+        return None
+    if isinstance(value, dict):
+        return {key: _sanitize_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json_value(item) for item in value]
+    return value
+
 
 async def _format_awaitable_result(awaitable: Awaitable[Any]) -> str:
     result = await awaitable

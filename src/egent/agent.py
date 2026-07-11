@@ -68,6 +68,21 @@ def _configure_logging() -> None:
 _configure_logging()
 
 
+def _sanitize_tool_call_dump(tool_call_dump: dict[str, Any]) -> dict[str, Any]:
+    function_payload = tool_call_dump.get("function")
+    if not isinstance(function_payload, dict):
+        return tool_call_dump
+    arguments = function_payload.get("arguments")
+    if not isinstance(arguments, str):
+        return tool_call_dump
+    sanitized_dump = dict(tool_call_dump)
+    sanitized_dump["function"] = {
+        **function_payload,
+        "arguments": egent.tool.sanitize_tool_arguments_json(arguments),
+    }
+    return sanitized_dump
+
+
 def build_skills(
     skill_paths: Iterable[str | pathlib.Path],
 ) -> tuple[dict[str, pathlib.Path], str]:
@@ -323,15 +338,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         while True:
             for attempt_index in range(_REQUEST_RETRY_COUNT):
                 try:
-                    async with self.__client.chat.completions.stream(
-                        model=self.model,
-                        messages=self.__messages,
-                        tools=api_tools if api_tools else NOT_GIVEN,
-                    ) as stream:
-                        async for event in stream:
-                            if event.type == "content.delta":
-                                self.__emit_event(TextDelta(event.delta))
-                        completion = await stream.get_final_completion()
+                    completion = await self.__fetch_chat_completion(api_tools)
                     break
                 except _RETRYABLE_NETWORK_EXCEPTIONS as error:
                     if isinstance(error, APIStatusError) and error.status_code < 500:
@@ -356,11 +363,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             self.__add_message(
                 "assistant",
                 reply_text,
-                tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
+                tool_calls=[
+                    _sanitize_tool_call_dump(tool_call.model_dump())
+                    for tool_call in tool_calls
+                ],
             )
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
-                function_arguments = tool_call.function.arguments
+                function_arguments = egent.tool.sanitize_tool_arguments_json(
+                    tool_call.function.arguments,
+                )
                 self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
                 is_exception = False
                 try:
@@ -380,6 +392,33 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                     result=tool_message["content"],
                     is_exception=is_exception,
                 ))
+
+    async def __fetch_chat_completion(
+        self,
+        api_tools: list[ChatCompletionToolUnionParam],
+    ) -> Any:
+        """流式请求 Chat Completion；工具参数解析失败时回退为非流式。"""
+        try:
+            async with self.__client.chat.completions.stream(
+                model=self.model,
+                messages=self.__messages,
+                tools=api_tools if api_tools else NOT_GIVEN,
+            ) as stream:
+                async for event in stream:
+                    if event.type == "content.delta":
+                        self.__emit_event(TextDelta(event.delta))
+                return await stream.get_final_completion()
+        except pydantic.ValidationError as error:
+            _logger.warning("流式工具参数解析失败，回退为非流式请求: %s", error)
+            response = await self.__client.chat.completions.create(
+                model=self.model,
+                messages=self.__messages,
+                tools=api_tools if api_tools else NOT_GIVEN,
+            )
+            reply_text = (response.choices[0].message.content or "").strip()
+            if reply_text:
+                self.__emit_event(TextDelta(reply_text))
+            return response
 
     async def request_submit(
         self,
@@ -412,7 +451,9 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
         def submit_handler(arguments_json: str) -> str:
             nonlocal submitted_arguments
-            submitted_arguments = submit_model.model_validate_json(arguments_json).model_dump()
+            submitted_arguments = submit_model.model_validate_json(
+                egent.tool.sanitize_tool_arguments_json(arguments_json),
+            ).model_dump()
             return "收到"
 
         self.__add_message("system", submit_reminder)

@@ -158,3 +158,28 @@ def test_varargs_not_supported() -> None:
 
     with pytest.raises(TypeError, match="不支持"):
         egent.tool.tool_from_function(bad_tool)
+
+
+def test_sanitize_tool_arguments_json_fixes_string_null() -> None:
+    """sanitize 应把字符串 null 转为 JSON null。"""
+    sanitized = egent.tool.sanitize_tool_arguments_json(
+        '{"path": "foo.txt", "limit": "null"}',
+    )
+
+    assert json.loads(sanitized) == {"path": "foo.txt", "limit": None}
+
+
+def test_tool_handler_accepts_string_null_optional_argument() -> None:
+    """handler 应容错模型把可选整数写成字符串 null。"""
+    def read_file(path: str, limit: int | None = None) -> str:
+        """读取文件。
+
+        @param path 文件路径
+        @param limit 行数上限
+        """
+        return f"{path}:{limit}"
+
+    handler = egent.tool.tool_handler_from_function(read_file)
+    result = handler('{"path": "foo.txt", "limit": "null"}')
+
+    assert result == "foo.txt:None"
