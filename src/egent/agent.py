@@ -451,6 +451,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
         def submit_handler(arguments_json: str) -> str:
             nonlocal submitted_arguments
+            if submitted_arguments:
+                raise ValueError("重复提交!")
             submitted_arguments = submit_model.model_validate_json(
                 egent.tool.sanitize_tool_arguments_json(arguments_json),
             ).model_dump()
