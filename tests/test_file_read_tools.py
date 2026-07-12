@@ -356,3 +356,38 @@ def test_search_directory_filter_glob(tmp_path: Path, monkeypatch) -> None:
     assert "[a.py line1] import os" in result
     assert "b.txt" not in result
     assert "c.py" not in result
+
+
+def test_search_file_truncates_long_results(tmp_path: Path, monkeypatch) -> None:
+    """search_file 超出字符上限时应提前截断。"""
+    monkeypatch.chdir(tmp_path)
+    max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+    match_line = "x" * max_chars
+    sample_file = tmp_path / "many.txt"
+    sample_file.write_text(
+        "\n".join([match_line, match_line, "tail match"]),
+        encoding="utf-8",
+    )
+    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+
+    result = search_file("x+", path="many.txt")
+
+    assert "内容太长被截断" in result
+    assert "搜索结果已提前截断" in result
+    assert "tail match" not in result
+
+
+def test_search_directory_truncates_long_results(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 超出字符上限时应提前截断。"""
+    monkeypatch.chdir(tmp_path)
+    max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+    match_line = "y" * max_chars
+    (tmp_path / "first.txt").write_text(match_line + "\n", encoding="utf-8")
+    (tmp_path / "second.txt").write_text("y\n", encoding="utf-8")
+
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    result = search_directory("y")
+
+    assert "内容太长被截断" in result
+    assert "搜索结果已提前截断" in result
+    assert "second.txt" not in result

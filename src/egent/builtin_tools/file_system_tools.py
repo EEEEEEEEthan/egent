@@ -108,6 +108,49 @@ def _slice_lines_from_position(
     return first_line_fragment + "".join(file_lines[start_line_index + 1 : end_line_index])
 
 
+def _tool_result_content_max_chars() -> int:
+    return egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+
+
+def _create_search_result_collector() -> tuple[Callable[[str], bool], Callable[[], str]]:
+    max_chars = _tool_result_content_max_chars()
+    lines: list[str] = []
+    current_length = 0
+    truncated = False
+
+    def append_match(match_text: str) -> bool:
+        nonlocal current_length, truncated
+        if truncated:
+            return False
+        separator_length = 1 if lines else 0
+        projected_length = current_length + separator_length + len(match_text)
+        if projected_length <= max_chars:
+            lines.append(match_text)
+            current_length = projected_length
+            return True
+        remaining_capacity = max_chars - current_length - separator_length
+        if remaining_capacity > 0:
+            lines.append(match_text[:remaining_capacity])
+            current_length = max_chars
+        truncated = True
+        return False
+
+    def finish() -> str:
+        if not lines:
+            return "(无匹配)"
+        body = "\n".join(lines)
+        if truncated:
+            return f"{body}...\n(内容太长被截断，搜索结果已提前截断)"
+        if len(body) > max_chars:
+            return (
+                f"{body[:max_chars]}...\n"
+                f"(内容太长被截断，剩余{len(body) - max_chars}字符)"
+            )
+        return body
+
+    return append_match, finish
+
+
 def get_walk_files_tool(
     validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "walk_files",
@@ -184,14 +227,14 @@ def _search_file_content(
         text = resolved.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return "(无匹配)"
-    lines: list[str] = []
+    append_match, finish = _create_search_result_collector()
     file_name = resolved.name
     for line_number, line_text in enumerate(text.splitlines(), start=1):
-        if regex.search(line_text):
-            lines.append(f"[{file_name} line{line_number}] {line_text}")
-    if not lines:
-        return "(无匹配)"
-    return "\n".join(lines)
+        if regex.search(line_text) and not append_match(
+            f"[{file_name} line{line_number}] {line_text}"
+        ):
+            break
+    return finish()
 
 
 def _search_directory(
@@ -202,7 +245,7 @@ def _search_directory(
 ) -> str:
     """在目录中递归搜索文件内容和文件名匹配。"""
     root = _open_directory(directory, validator)
-    lines: list[str] = []
+    append_match, finish = _create_search_result_collector()
     for file_path in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
         if not file_path.is_file():
             continue
@@ -214,18 +257,18 @@ def _search_directory(
         if file_filter is not None and not fnmatch.fnmatch(file_path.name, file_filter):
             continue
         relative_file_text = resolved_file_path.relative_to(root).as_posix()
-        if regex.search(relative_file_text):
-            lines.append(f"[{relative_file_text}]")
+        if regex.search(relative_file_text) and not append_match(f"[{relative_file_text}]"):
+            break
         try:
             text = resolved_file_path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
         for line_number, line_text in enumerate(text.splitlines(), start=1):
-            if regex.search(line_text):
-                lines.append(f"[{relative_file_text} line{line_number}] {line_text}")
-    if not lines:
-        return "(无匹配)"
-    return "\n".join(lines)
+            if regex.search(line_text) and not append_match(
+                f"[{relative_file_text} line{line_number}] {line_text}"
+            ):
+                return finish()
+    return finish()
 
 
 def get_search_directory_tool(
@@ -322,7 +365,7 @@ def get_read_file_tool(
         # 使用更低的截断阈值（egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10），且不保存临时文件。
         # 原因：文件本身在磁盘上，AI 可直接用 line/column 参数继续读取，无需额外副本。
         # 降低阈值可避免"读文件→截断→读临时文件→又被截断"的无意义循环。
-        max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+        max_chars = _tool_result_content_max_chars()
         if len(content) <= max_chars:
             return content
         next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
