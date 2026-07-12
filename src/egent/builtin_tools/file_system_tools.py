@@ -171,14 +171,6 @@ def get_walk_files_tool(
     return walk_files
 
 
-def _format_search_matches(lines: list[str], truncated: bool) -> str:
-    if not lines:
-        return "(无匹配)"
-    if truncated:
-        return "\n".join(lines) + "\n(匹配过多已截断)"
-    return "\n".join(lines)
-
-
 def _search_file_content(
     resolved: Path,
     regex: re.Pattern,
@@ -193,16 +185,13 @@ def _search_file_content(
     except (UnicodeDecodeError, OSError):
         return "(无匹配)"
     lines: list[str] = []
-    truncated = False
     file_name = resolved.name
     for line_number, line_text in enumerate(text.splitlines(), start=1):
-        if not regex.search(line_text):
-            continue
-        lines.append(f"[{file_name} line{line_number}] {line_text}")
-        if len(lines) >= egent.limits.SEARCH_RESULT_MAX_LINES:
-            truncated = True
-            break
-    return _format_search_matches(lines, truncated)
+        if regex.search(line_text):
+            lines.append(f"[{file_name} line{line_number}] {line_text}")
+    if not lines:
+        return "(无匹配)"
+    return "\n".join(lines)
 
 
 def _search_directory(
@@ -214,12 +203,6 @@ def _search_directory(
     """在目录中递归搜索文件内容和文件名匹配。"""
     root = _open_directory(directory, validator)
     lines: list[str] = []
-    truncated = False
-
-    def append_match(match_text: str) -> bool:
-        lines.append(match_text)
-        return len(lines) >= egent.limits.SEARCH_RESULT_MAX_LINES
-
     for file_path in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
         if not file_path.is_file():
             continue
@@ -231,22 +214,18 @@ def _search_directory(
         if file_filter is not None and not fnmatch.fnmatch(file_path.name, file_filter):
             continue
         relative_file_text = resolved_file_path.relative_to(root).as_posix()
-        if regex.search(relative_file_text) and append_match(f"[{relative_file_text}]"):
-            truncated = True
-            break
+        if regex.search(relative_file_text):
+            lines.append(f"[{relative_file_text}]")
         try:
             text = resolved_file_path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
         for line_number, line_text in enumerate(text.splitlines(), start=1):
-            if not regex.search(line_text):
-                continue
-            if append_match(f"[{relative_file_text} line{line_number}] {line_text}"):
-                truncated = True
-                break
-        if truncated:
-            break
-    return _format_search_matches(lines, truncated)
+            if regex.search(line_text):
+                lines.append(f"[{relative_file_text} line{line_number}] {line_text}")
+    if not lines:
+        return "(无匹配)"
+    return "\n".join(lines)
 
 
 def get_search_directory_tool(
