@@ -122,6 +122,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             tools: 自定义工具列表，构造后固定不变。
             path_permissions: 文件工具路径权限，构造后固定不变；``None`` 表示不限制。
         """
+        self.busy = False
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
             api_key=model_settings.api_key,
@@ -266,7 +267,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         arguments = function_payload.get("arguments")
         if not isinstance(arguments, str):
             return tool_call_dump
-        sanitized_dump = dict(tool_call_dump)
+        sanitized_dump = dict[str, Any](tool_call_dump)
         sanitized_dump["function"] = {
             **function_payload,
             "arguments": egent.tool.sanitize_tool_arguments_json(arguments),

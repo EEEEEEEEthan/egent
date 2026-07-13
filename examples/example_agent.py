@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from inspect import _void
 import sys
 from pathlib import Path
 
@@ -27,28 +28,50 @@ async def run_turn(
     agent.add_message("user", input(">>> ").strip())
     await printer.send()
 
+_WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
+_DISCOVERABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=("*",),
+    blacklist=(
+        ".git",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+    ),
+)
+_READABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=("*",),
+    blacklist=(f"{_WORKING_DIRECTORY}/.egent/.model.toml",),
+)
+_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=(
+        f"{_WORKING_DIRECTORY}",
+        f"{_WORKING_DIRECTORY}/*",
+    ),
+    blacklist=(),
+)
+_NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=(),
+    blacklist=("*",),
+)
+
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
+    agents:dict[str, egent.egent.Agent] = {}
     ethan = egent.agent.Agent(
         settings="gpt5",
-        system_prompt="你是ethan，你是这个项目的主程",
-        skills=(_EXAMPLE_GREET_SKILL,),
+        system_prompt=
+            "你是ethan，你是这个项目的主程\n"
+        ,
+        skills=(),
         tools=(),
         path_permissions=egent.builtin_tools.path_validator.PathPermissions(
-            discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("*",),
-                blacklist=(),
-            ),
-            readable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("*",),
-                blacklist=(),
-            ),
-            editable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("*",),
-                blacklist=("*",),
-            ),
+            discoverable=_DISCOVERABLE_RULE,
+            readable=_READABLE_RULE,
+            editable=_NO_EDITABLE_RULE,
         ),
     )
+    ethan.name = "ethan"
+    agents[ethan.name] = ethan
     printer = conversation_printer.ConversationPrinter(ethan)
     while True:
         await run_turn(ethan, printer)
