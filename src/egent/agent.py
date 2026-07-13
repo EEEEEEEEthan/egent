@@ -106,8 +106,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     def __init__(
         self,
-        settings: str,
         *,
+        settings: str,
         system_prompt: str = "",
         skills: Iterable[str | pathlib.Path] = (),
         tools: Iterable[egent.tool.ToolCallable] = (),

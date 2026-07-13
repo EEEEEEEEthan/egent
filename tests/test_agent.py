@@ -27,7 +27,7 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
         ),
     )
 
-    leader = egent.agent.Agent("test")
+    leader = egent.agent.Agent(settings="test")
     leader.add_message("user", "hello")
     leader.add_listener(lambda _event: None)
 
@@ -116,7 +116,7 @@ def test_agent_composes_system_prompt_with_skill_catalog(monkeypatch, tmp_path) 
     )
 
     agent = egent.agent.Agent(
-        "test",
+        settings="test",
         system_prompt="你是代码助手。",
         skills=[skill_dir],
     )
@@ -150,7 +150,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
             whitelist=("*",),
         ),
     )
-    agent = egent.agent.Agent("test", path_permissions=permissions)
+    agent = egent.agent.Agent(settings="test", path_permissions=permissions)
 
     tool_names = {tool_schema["function"]["name"] for tool_schema in agent._Agent__api_tools}
 
@@ -172,7 +172,7 @@ async def test_fetch_chat_completion_falls_back_on_tool_argument_validation_erro
         ),
     )
 
-    agent = egent.agent.Agent("test")
+    agent = egent.agent.Agent(settings="test")
     agent.add_message("user", "read foo")
 
     class BrokenStream:

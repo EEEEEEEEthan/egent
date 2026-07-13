@@ -128,7 +128,7 @@ def test_agent_injects_skill_catalog(tmp_path, monkeypatch) -> None:
         ),
     )
 
-    agent = egent.agent.Agent("test", skills=[skill_dir])
+    agent = egent.agent.Agent(settings="test", skills=[skill_dir])
 
     assert agent._Agent__messages[0]["role"] == "system"
     assert "demo: 演示技能" in agent._Agent__messages[0]["content"]
