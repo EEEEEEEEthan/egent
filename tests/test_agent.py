@@ -38,7 +38,7 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
     assert reviewer is not leader
     assert reviewer.model == leader.model
     assert reviewer._Agent__client is leader._Agent__client
-    assert reviewer._Agent__skill_tools is leader._Agent__skill_tools
+    assert reviewer._Agent__builtin_tools is leader._Agent__builtin_tools
     assert reviewer.path_permissions is leader.path_permissions
     assert reviewer.tools == leader.tools
     assert reviewer._Agent__messages == leader._Agent__messages

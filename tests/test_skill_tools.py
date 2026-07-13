@@ -132,11 +132,9 @@ def test_agent_injects_skill_catalog(tmp_path, monkeypatch) -> None:
 
     assert agent._Agent__messages[0]["role"] == "system"
     assert "demo: 演示技能" in agent._Agent__messages[0]["content"]
-    api_tools, _handlers = egent.tool.resolve_tools([*agent._Agent__skill_tools])
-    assert {tool["function"]["name"] for tool in api_tools} == {
-        "learn_skill",
-        "run_skill_script",
-    }
+    api_tools, _handlers = egent.tool.resolve_tools([*agent._Agent__builtin_tools])
+    tool_names = {tool["function"]["name"] for tool in api_tools}
+    assert {"learn_skill", "run_skill_script"}.issubset(tool_names)
 
 
 def test_skill_tools_register_with_resolve_tools(tmp_path) -> None:

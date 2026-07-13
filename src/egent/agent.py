@@ -207,13 +207,13 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.model = model_settings.model_name
         self.tools: tuple[egent.tool.ToolCallable, ...] = tuple[ToolCallable, ...](tools)
         self.path_permissions = path_permissions
-        self.__file_tools = egent.builtin_tools.file_system_tools.get_file_tools(path_permissions)
         self.__messages: list[ChatMessage] = []
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = build_skills(skills)
-        self.__skill_tools = (
-            egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
-        )
+        self.__builtin_tools = [
+            *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
+            *egent.builtin_tools.file_system_tools.get_file_tools(path_permissions),
+        ]
         if skill_index:
             self.__add_message("system", skill_catalog)
 
@@ -332,7 +332,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self,
     ) -> None:
         api_tools, tool_handlers = egent.tool.resolve_tools(
-            [*self.__skill_tools, *self.__file_tools, *self.tools],
+            [*self.__builtin_tools, *self.tools],
         )
 
         while True:
