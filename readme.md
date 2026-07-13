@@ -91,18 +91,15 @@ python examples/example_agent.py
 
 ### 路径安全
 
-`Agent` 通过 ``path_permissions`` 字段控制内置文件工具的路径权限；写入能力由 ``editable`` 白名单与黑名单决定。权限变化后下次 ``request()`` 会自动追加「路径权限已更新」system 消息（与工具集变更提示类似）。
+`Agent` 构造参数 ``path_permissions`` 控制内置文件工具的路径权限；写入能力由 ``editable`` 白名单与黑名单决定。
 
 ``examples/_common.py`` 中的 ``create_egent_path_permissions()`` 返回 ``PathPermissions``，用白名单与黑名单控制可发现、可读、可编辑。模式使用 fnmatch 全路径匹配（``*`` 可跨越路径分隔符）；``*`` 白名单表示全路径放行，项目目录黑名单使用解析后的绝对路径。目录搜索要求可发现且可读，文件搜索仅要求可读。``list_path_permissions`` 工具可列出当前规则。
 
-### 工作流
+### 示例
 
 | 示例 | 说明 |
 |------|------|
-| `example_agent.py` | 交互式 Agent CLI，集成所有工具 |
-| `example_workflow_develop.py` | 主管委派 → 编码 → 验收循环 |
-| `example_workflow_coding.py` | 编码实现 |
-| `example_workflow_review.py` | 代码验收 |
+| `example_agent.py` | 交互式 Agent CLI |
 
 ### 模型配置
 
@@ -116,18 +113,14 @@ python examples/example_agent.py
 
 ```
 ├── .agents/skills/          # 技能目录
-│   ├── build-workflow/
 │   └── example-greet/
 ├── .egent/                  # 项目配置与运行时数据
 │   ├── .model.toml          # 模型配置（不提交到 Git）
 │   ├── .logs/               # 日志文件
 │   └── .temp/               # 临时文件
-├── examples/                # 工作流示例
+├── examples/                # 示例
 │   ├── _common.py           # 共享辅助代码（路径校验器等）
-│   ├── example_agent.py     # 交互式 Agent CLI
-│   ├── example_workflow_develop.py
-│   ├── example_workflow_coding.py
-│   └── example_workflow_review.py
+│   └── example_agent.py     # 交互式 Agent CLI
 ├── src/egent/               # 核心库
 │   ├── __init__.py
 │   ├── agent.py               # Agent 管理

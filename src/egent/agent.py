@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import pathlib
 import re
+from src.egent.tool import ToolCallable
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from copy import deepcopy
@@ -17,7 +17,6 @@ from typing import Any, Literal
 import httpx
 import pydantic
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, NOT_GIVEN, RateLimitError
-from openai.lib import pydantic_function_tool
 from openai.types.chat.chat_completion_tool_union_param import (
     ChatCompletionToolUnionParam,
 )
@@ -189,12 +188,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         settings: str,
         *,
         skills: Iterable[str | pathlib.Path] = (),
+        tools: Iterable[egent.tool.ToolCallable] = (),
+        path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
     ) -> None:
         """初始化对话会话。
 
         Args:
             settings: ``.egent/.model.toml`` 中的 profile 名（相对运行目录 ``cwd``）。
             skills: 技能路径列表，每项为技能目录或 ``SKILL.md`` 路径。
+            tools: 自定义工具列表，构造后固定不变。
+            path_permissions: 文件工具路径权限，构造后固定不变；``None`` 表示不限制。
         """
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
@@ -202,12 +205,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             base_url=model_settings.base_url,
         )
         self.model = model_settings.model_name
-        self.tools: list[egent.tool.ToolCallable] = []
+        self.tools: tuple[egent.tool.ToolCallable, ...] = tuple[ToolCallable, ...](tools)
+        self.path_permissions = path_permissions
+        self.__file_tools = egent.builtin_tools.file_system_tools.get_file_tools(path_permissions)
         self.__messages: list[ChatMessage] = []
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
-        self.__tool_schemas_text: str | None = None
-        self.__path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None
-        self.__path_permissions_text: str | None = None
         skill_index, skill_catalog = build_skills(skills)
         self.__skill_tools = (
             egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []
@@ -215,26 +217,12 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         if skill_index:
             self.__add_message("system", skill_catalog)
 
-    @property
-    def path_permissions(self) -> egent.builtin_tools.path_validator.PathPermissions | None:
-        """文件工具路径权限。"""
-        return self.__path_permissions
-
-    @path_permissions.setter
-    def path_permissions(
-        self,
-        value: egent.builtin_tools.path_validator.PathPermissions | None,
-    ) -> None:
-        self.__path_permissions = value
-
     def __copy__(self) -> Agent:
         cloned = Agent.__new__(Agent)
         state = self.__dict__.copy()
         for key, value in state.items():
             if key.endswith("__messages"):
                 state[key] = deepcopy(value)
-            elif key == "tools":
-                state[key] = list[Any](value)
             elif key.endswith("__event_listeners"):
                 state[key] = []
         cloned.__dict__.update(state)
@@ -300,40 +288,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     async def __request(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self,
-        *,
-        extra_tools: Iterable[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler]] = (),
     ) -> None:
-        extra_tools = tuple[tuple[ChatCompletionToolUnionParam, egent.tool.ToolHandler], ...](extra_tools)
-        file_tools_state_text = (
-            self.__path_permissions.format_rules()
-            if self.__path_permissions is not None
-            else ""
-        )
-        path_permissions_changed = (
-            self.__path_permissions_text is not None
-            and file_tools_state_text != self.__path_permissions_text
-        )
-        self.__path_permissions_text = file_tools_state_text
-        file_tools = egent.builtin_tools.file_system_tools.get_file_tools(self.__path_permissions)
         api_tools, tool_handlers = egent.tool.resolve_tools(
-            [*self.__skill_tools, *file_tools, *self.tools],
+            [*self.__skill_tools, *self.__file_tools, *self.tools],
         )
-        api_tools.extend(tool_schema for tool_schema, _ in extra_tools)
-        tool_handlers.update(
-            {tool_schema["function"]["name"]: tool_handler for tool_schema, tool_handler in extra_tools}
-        )
-        tool_schemas_text = json.dumps(api_tools, ensure_ascii=False, sort_keys=True)
-        tool_schemas_changed = (
-            self.__tool_schemas_text is not None and tool_schemas_text != self.__tool_schemas_text
-        )
-        if path_permissions_changed or tool_schemas_changed:
-            update_messages: list[str] = []
-            if path_permissions_changed:
-                update_messages.append("路径权限已更新")
-            if tool_schemas_changed:
-                update_messages.append("工具集已更新")
-            self.__add_message("system", "，".join(update_messages))
-        self.__tool_schemas_text = tool_schemas_text
 
         while True:
             for attempt_index in range(_REQUEST_RETRY_COUNT):
@@ -419,51 +377,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             if reply_text:
                 self.__emit_event(TextDelta(reply_text))
             return response
-
-    async def request_submit(
-        self,
-        submit_fields: dict[str, tuple[type, str]],
-        tool_name: str = "submit_task",
-    ) -> dict[str, Any]:
-        """循环请求直至指定 submit 工具被调用，返回提交的参数。
-
-        Args:
-            submit_fields: submit 参数规格，``字段名 -> (类型, 描述)``。
-            tool_name: submit 工具名，默认 ``submit_task``。
-
-        Returns:
-            agent 提交的参数，key 与 ``submit_fields`` 一致。
-        """
-        submit_model = pydantic.create_model(
-            "SubmitArguments",
-            **{
-                field_name: (field_type, pydantic.Field(description=field_description))
-                for field_name, (field_type, field_description) in submit_fields.items()
-            },
-        )
-        submit_schema = pydantic_function_tool(
-            submit_model,
-            name=tool_name,
-            description="提交任务结果，结束当前工作循环",
-        )
-        submitted_arguments: dict[str, Any] | None = None
-        submit_reminder = f"工作完成后使用 {tool_name} 工具提交结果"
-
-        def submit_handler(arguments_json: str) -> str:
-            nonlocal submitted_arguments
-            if submitted_arguments:
-                raise ValueError("重复提交!")
-            submitted_arguments = submit_model.model_validate_json(
-                egent.tool.sanitize_tool_arguments_json(arguments_json),
-            ).model_dump()
-            return "收到"
-
-        self.__add_message("system", submit_reminder)
-        while True:
-            await self.__request(extra_tools=((submit_schema, submit_handler),))
-            if submitted_arguments is not None:
-                return submitted_arguments  # pyright: ignore[reportUnreachable]
-            self.__add_message("system", submit_reminder)
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""

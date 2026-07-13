@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import example_workflow_develop
 import _common
 import conversation_printer
 from egent import builtin_tools
@@ -23,19 +22,8 @@ async def run_turn(
     agent: Agent,
     printer: conversation_printer.ConversationPrinter,
 ) -> None:
-    """运行一轮交互：收集用户输入并发送请求。
-
-    每次 turn 重新设置路径权限，使 ``reload_modules`` 后下一轮可以拿到更新后的规则。
-    """
-    agent.path_permissions = _common.create_egent_path_permissions()
+    """运行一轮交互：收集用户输入并发送请求。"""
     agent.add_message("user", input(">>> ").strip())
-    agent.tools = [
-        *builtin_tools.git_tools.read_only_tools,
-        builtin_tools.git_tools.git_add,
-        builtin_tools.git_tools.git_commit,
-        _common.reload_modules,
-        example_workflow_develop.delegate_develop_workflow,
-    ]
     await printer.request()
 
 
@@ -44,16 +32,13 @@ async def async_main() -> int:
     agent = Agent(
         "gpt5",
         skills=[_EXAMPLE_GREET_SKILL],
-    )
-    agent.path_permissions = _common.create_egent_path_permissions()
-    agent.add_message(
-        "system",
-        """你时egent.你是这个agent项目的主管,同时,你就是这个项目驱动的agent.
-        你接到的开发任务，你应该尽可能用workflow完成.
-
-        对于单个工作可以使用delegate_develop_workflow. 如果这个任务可以拆成独立的多个任务,或者拆成连续的多个步骤,
-        那么你就应该拆成多个任务或者多个步骤,依次交给你的手下,每做完一个任务提交一次.每做完一个提交一个.
-        """,
+        tools=[
+            *builtin_tools.git_tools.read_only_tools,
+            builtin_tools.git_tools.git_add,
+            builtin_tools.git_tools.git_commit,
+            _common.reload_modules,
+        ],
+        path_permissions=_common.create_egent_path_permissions(),
     )
     printer = conversation_printer.ConversationPrinter(agent)
     while True:

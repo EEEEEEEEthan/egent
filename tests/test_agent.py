@@ -119,8 +119,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
             whitelist=("*",),
         ),
     )
-    agent = egent.agent.Agent("test")
-    agent.path_permissions = permissions
+    agent = egent.agent.Agent("test", path_permissions=permissions)
 
     api_tools, _ = egent.tool.resolve_tools(
         [*egent.builtin_tools.file_system_tools.get_file_tools(agent.path_permissions)],
@@ -129,79 +128,6 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
 
     assert "read_file" in tool_names
     assert "create_file" in tool_names
-
-
-@pytest.mark.asyncio
-async def test_request_notifies_path_permissions_change(monkeypatch) -> None:
-    """request 在路径权限变化时应追加 system 提示。"""
-    monkeypatch.setattr(
-        "egent.model_settings.ModelSettings.load",
-        lambda _profile: SimpleNamespace(
-            api_key="test",
-            base_url="http://localhost",
-            model_name="test-model",
-        ),
-    )
-
-    def make_permissions(blacklist: tuple[str, ...]) -> egent.builtin_tools.path_validator.PathPermissions:
-        return egent.builtin_tools.path_validator.PathPermissions(
-            discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("*",),
-            ),
-            readable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("*",),
-                blacklist=blacklist,
-            ),
-            editable=egent.builtin_tools.path_validator.PathPermissionRule(
-                whitelist=("*",),
-            ),
-        )
-
-    agent = egent.agent.Agent("test")
-    agent.path_permissions = make_permissions(())
-    agent.add_message("user", "hello")
-
-    class FakeStream:
-        """测试用 chat completion stream 替身。"""
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args: object) -> None:
-            return None
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self) -> None:
-            raise StopAsyncIteration
-
-        async def get_final_completion(self) -> SimpleNamespace:
-            """返回无 tool call 的完成结果。"""
-            return SimpleNamespace(
-                choices=[
-                    SimpleNamespace(
-                        message=SimpleNamespace(content="ok", tool_calls=None),
-                    ),
-                ],
-            )
-
-    monkeypatch.setattr(
-        agent._Agent__client.chat.completions,
-        "stream",
-        lambda **_kwargs: FakeStream(),
-    )
-
-    await agent.request()
-    agent.path_permissions = make_permissions(("secret/*",))
-    await agent.request()
-
-    system_messages = [
-        message["content"]
-        for message in agent._Agent__messages
-        if message.get("role") == "system" and isinstance(message.get("content"), str)
-    ]
-    assert any("路径权限已更新" in message for message in system_messages)
 
 
 @pytest.mark.asyncio
