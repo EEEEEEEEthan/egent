@@ -9,9 +9,6 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
-from inspect import _void
-import sys
 from pathlib import Path
 
 import conversation_printer
@@ -103,7 +100,7 @@ async def async_main() -> int:
     )
     agents[milo.name] = milo
     conversation_printer.ConversationPrinter(ethan)
-    conversation_printer.ConversationPrinter(milo)
+    conversation_printer.ConversationPrinter(milo, 1)
     while True:
         ethan.add_message("user", input(">>> ").strip())
         await ethan.send()
