@@ -53,6 +53,8 @@ async def async_main() -> int:
             @param prompt: 说话内容
             @return: 回复内容
             """
+            return "已传达。请耐心等待。回复`1`即可。"
+            print(f"{from_name}->{to_name}:\n{prompt}")
             result = ""
             for agent in agents.values():
                 if agent.name == to_name:
@@ -61,8 +63,9 @@ async def async_main() -> int:
                     result = agent.last_message
                 elif agent.name != from_name:
                     agent.add_message("system", f"{from_name}对{agent.name}说:\n{prompt}")
+            print(f"{to_name}->{from_name}:\n{result}")
             for agent in agents.values():
-                if agent.name != to_name:
+                if agent.name != to_name and agent.name != from_name:
                     agent.add_message("system", f"{to_name}回复{from_name}:\n{result}")
             return result
         return speak_tool
@@ -72,7 +75,7 @@ async def async_main() -> int:
         settings="gpt5",
         system_prompt=
             "你是ethan，你是这个项目的主程\n"
-            "milo是你的助理，如果需要看代码，可以让他先看，帮你筛选出关键代码"
+            "milo是你的助理，如果需要看代码，可以和milo说让他先看，帮你筛选出关键代码"
         ,
         skills=(),
         tools=(get_speak_tool("ethan"),),
@@ -99,11 +102,12 @@ async def async_main() -> int:
         ),
     )
     agents[milo.name] = milo
-    conversation_printer.ConversationPrinter(ethan)
-    conversation_printer.ConversationPrinter(milo, 1)
+    #conversation_printer.ConversationPrinter(ethan)
+    #conversation_printer.ConversationPrinter(milo, 1)
     while True:
         ethan.add_message("user", input(">>> ").strip())
         await ethan.send()
+        print(f"ethan: \n{ethan.last_message}")
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(async_main()))
