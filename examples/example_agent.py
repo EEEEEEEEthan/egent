@@ -68,6 +68,7 @@ async def async_main() -> int:
         settings="gpt5",
         system_prompt=
             "你是ethan，你是这个项目的主程\n"
+            "milo是你的助理，如果需要看代码，可以让他先看，帮你筛选出关键代码"
         ,
         skills=(),
         tools=(get_speak_tool("ethan"),),
@@ -83,7 +84,7 @@ async def async_main() -> int:
     milo = egent.agent.Agent(
         settings="gpt5",
         system_prompt=
-            "你是milo，你是ethan的小弟，按ethan的安排做事\n"
+            "你是milo，是ethan的助理。ethan是这个项目的主程\n"
         ,
         skills=(),
         tools=(get_speak_tool("milo"),),
