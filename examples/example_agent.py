@@ -71,6 +71,7 @@ async def async_main() -> int:
         return speak_tool
     # ethan
     ethan = egent.agent.Agent(
+        name="ethan",
         settings="gpt5",
         system_prompt=
             "你是ethan，你是这个项目的主程\n"
@@ -84,10 +85,10 @@ async def async_main() -> int:
             editable=_NO_EDITABLE_RULE,
         ),
     )
-    ethan.name = "ethan"
     agents[ethan.name] = ethan
     # milo
     milo = egent.agent.Agent(
+        name="milo",
         settings="gpt5",
         system_prompt=
             "你是milo，是ethan的助理。ethan是这个项目的主程\n"
@@ -100,7 +101,6 @@ async def async_main() -> int:
             editable=_NO_EDITABLE_RULE,
         ),
     )
-    milo.name = "milo"
     agents[milo.name] = milo
     conversation_printer.ConversationPrinter(ethan)
     conversation_printer.ConversationPrinter(milo)

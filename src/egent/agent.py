@@ -108,6 +108,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self,
         *,
         settings: str,
+        name: str = "",
         system_prompt: str = "",
         skills: Iterable[str | pathlib.Path] = (),
         tools: Iterable[egent.tool.ToolCallable] = (),
@@ -117,12 +118,14 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
         Args:
             settings: ``.egent/.model.toml`` 中的 profile 名（相对运行目录 ``cwd``）。
+            name: Agent 名称，用于多 Agent 场景标识。
             system_prompt: 系统提示词正文；会与技能目录等拼成一条开头 system 消息。
             skills: 技能路径列表，每项为技能目录或 ``SKILL.md`` 路径。
             tools: 自定义工具列表，构造后固定不变。
             path_permissions: 文件工具路径权限，构造后固定不变；``None`` 表示不限制。
         """
         self.busy = False
+        self.name = name
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
             api_key=model_settings.api_key,
@@ -204,7 +207,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     async def send(self) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         if self.busy:
-            raise RuntimeError("Agent is busy")
+            raise RuntimeError(f"Agent {self.name} is busy")
         self.busy = True
         while True:
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
@@ -299,7 +302,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加消息原文，不截断。供框架写入 agent 回复等。"""
         if self.busy:
-            raise RuntimeError("Agent is busy")
+            raise RuntimeError(f"Agent {self.name} is busy")
         message: ChatMessage = {"role": role, "content": content, **extra}
         self.__messages.append(message)
         extra_text = f" | extra={extra}" if extra else ""
