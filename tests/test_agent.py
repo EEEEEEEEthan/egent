@@ -14,7 +14,6 @@ from openai import APIStatusError
 
 import egent.agent
 import egent.builtin_tools.path_validator
-import egent.tool
 
 
 def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
@@ -37,9 +36,9 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
     assert reviewer is not leader
     assert reviewer.model == leader.model
     assert reviewer._Agent__client is leader._Agent__client
-    assert reviewer._Agent__builtin_tools is leader._Agent__builtin_tools
+    assert reviewer._Agent__api_tools is leader._Agent__api_tools
+    assert reviewer._Agent__tool_handlers is leader._Agent__tool_handlers
     assert reviewer.path_permissions is leader.path_permissions
-    assert reviewer.tools == leader.tools
     assert reviewer._Agent__messages == leader._Agent__messages
     assert reviewer._Agent__messages is not leader._Agent__messages
     assert not reviewer._Agent__event_listeners
@@ -123,10 +122,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
     )
     agent = egent.agent.Agent("test", path_permissions=permissions)
 
-    api_tools, _ = egent.tool.resolve_tools(
-        [*egent.builtin_tools.file_system_tools.FileSystemToolSet(agent.path_permissions).tools],
-    )
-    tool_names = {tool_schema["function"]["name"] for tool_schema in api_tools}
+    tool_names = {tool_schema["function"]["name"] for tool_schema in agent._Agent__api_tools}
 
     assert "read_file" in tool_names
     assert "create_file" in tool_names
@@ -203,7 +199,7 @@ async def test_fetch_chat_completion_falls_back_on_tool_argument_validation_erro
     text_deltas: list[str] = []
     agent.add_listener(lambda event: text_deltas.append(event.text) if hasattr(event, "text") else None)
 
-    completion = await agent._Agent__fetch_chat_completion([])
+    completion = await agent._Agent__fetch_chat_completion()
 
     assert len(create_calls) == 1
     assert completion.choices[0].message.content == "fallback text"

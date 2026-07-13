@@ -15,10 +15,7 @@ from typing import Any, Literal
 
 import httpx
 import pydantic
-from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, NOT_GIVEN, RateLimitError
-from openai.types.chat.chat_completion_tool_union_param import (
-    ChatCompletionToolUnionParam,
-)
+from openai import NOT_GIVEN, APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 
 import egent._line_position
 import egent.builtin_tools.file_system_tools
@@ -129,15 +126,17 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             base_url=model_settings.base_url,
         )
         self.model = model_settings.model_name
-        self.tools: tuple[egent.tool.ToolCallable, ...] = tuple[egent.tool.ToolCallable, ...](tools)
         self.path_permissions = path_permissions
         self.__messages: list[ChatMessage] = []
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = self.__build_skills(skills)
-        self.__builtin_tools = [
-            *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
-            *egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools,
-        ]
+        self.__api_tools, self.__tool_handlers = egent.tool.resolve_tools(
+            [
+                *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
+                *egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools,
+                *tools,
+            ],
+        )
         if skill_index:
             self.__add_message("system", skill_catalog)
 
@@ -330,14 +329,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     async def __send(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self,
     ) -> None:
-        api_tools, tool_handlers = egent.tool.resolve_tools(
-            [*self.__builtin_tools, *self.tools],
-        )
-
         while True:
             for attempt_index in range(_REQUEST_RETRY_COUNT):
                 try:
-                    completion = await self.__fetch_chat_completion(api_tools)
+                    completion = await self.__fetch_chat_completion()
                     break
                 except _RETRYABLE_NETWORK_EXCEPTIONS as error:
                     if isinstance(error, APIStatusError) and error.status_code < 500:
@@ -375,7 +370,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
                 is_exception = False
                 try:
-                    handler = tool_handlers.get(function_name)
+                    handler = self.__tool_handlers.get(function_name)
                     if handler is None:
                         raise ValueError(f"工具未注册: {function_name}")
                     handler_result = handler(function_arguments)
@@ -392,16 +387,13 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                     is_exception=is_exception,
                 ))
 
-    async def __fetch_chat_completion(
-        self,
-        api_tools: list[ChatCompletionToolUnionParam],
-    ) -> Any:
+    async def __fetch_chat_completion(self) -> Any:
         """流式请求 Chat Completion；工具参数解析失败时回退为非流式。"""
         try:
             async with self.__client.chat.completions.stream(
                 model=self.model,
                 messages=self.__messages,
-                tools=api_tools if api_tools else NOT_GIVEN,
+                tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
             ) as stream:
                 async for event in stream:
                     if event.type == "content.delta":
@@ -412,7 +404,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             response = await self.__client.chat.completions.create(
                 model=self.model,
                 messages=self.__messages,
-                tools=api_tools if api_tools else NOT_GIVEN,
+                tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
             )
             reply_text = (response.choices[0].message.content or "").strip()
             if reply_text:
