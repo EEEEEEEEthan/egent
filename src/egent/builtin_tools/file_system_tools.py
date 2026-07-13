@@ -5,7 +5,8 @@ from __future__ import annotations
 import fnmatch
 import re
 import shutil
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Generator
 from pathlib import Path
 
 import egent._line_position
@@ -112,43 +113,47 @@ def _tool_result_content_max_chars() -> int:
     return egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
 
 
-def _create_search_result_collector() -> tuple[Callable[[str], bool], Callable[[], str]]:
-    max_chars = _tool_result_content_max_chars()
-    lines: list[str] = []
-    current_length = 0
-    truncated = False
+def _format_search_result(matched_lines: list[str], timed_out: bool) -> str:
+    body = "\n".join(matched_lines) if matched_lines else "(无匹配)"
+    if timed_out:
+        return f"(搜索超时)\n{body}"
+    return body
 
-    def append_match(match_text: str) -> bool:
-        nonlocal current_length, truncated
-        if truncated:
-            return False
-        separator_length = 1 if lines else 0
-        projected_length = current_length + separator_length + len(match_text)
-        if projected_length <= max_chars:
-            lines.append(match_text)
-            current_length = projected_length
-            return True
-        remaining_capacity = max_chars - current_length - separator_length
-        if remaining_capacity > 0:
-            lines.append(match_text[:remaining_capacity])
-            current_length = max_chars
-        truncated = True
+
+def _iter_matching_file_lines(
+    resolved_path: Path,
+    regex: re.Pattern[str],
+    deadline_monotonic: float,
+) -> Generator[tuple[int, str], None, bool]:
+    try:
+        with resolved_path.open(encoding="utf-8") as file_handle:
+            for line_number, raw_line in enumerate(file_handle, start=1):
+                if time.monotonic() >= deadline_monotonic:
+                    return True
+                line_text = raw_line.rstrip("\r\n")
+                if regex.search(line_text):
+                    yield line_number, line_text
+    except (UnicodeDecodeError, OSError):
         return False
+    return False
 
-    def finish() -> str:
-        if not lines:
-            return "(无匹配)"
-        body = "\n".join(lines)
-        if truncated:
-            return f"{body}...\n(内容太长被截断，搜索结果已提前截断)"
-        if len(body) > max_chars:
-            return (
-                f"{body[:max_chars]}...\n"
-                f"(内容太长被截断，剩余{len(body) - max_chars}字符)"
-            )
-        return body
 
-    return append_match, finish
+def _collect_search_matches(
+    resolved_path: Path,
+    regex: re.Pattern[str],
+    deadline_monotonic: float,
+    format_match: Callable[[int, str], str],
+) -> tuple[list[str], bool]:
+    matched_lines: list[str] = []
+    matching_lines = _iter_matching_file_lines(resolved_path, regex, deadline_monotonic)
+    timed_out = False
+    try:
+        while True:
+            line_number, line_text = next(matching_lines)
+            matched_lines.append(format_match(line_number, line_text))
+    except StopIteration as stop_iteration:
+        timed_out = bool(stop_iteration.value)
+    return matched_lines, timed_out
 
 
 def get_walk_files_tool(
@@ -214,63 +219,6 @@ def get_walk_files_tool(
     return walk_files
 
 
-def _search_file_content(
-    resolved: Path,
-    regex: re.Pattern,
-    validator: egent.builtin_tools.path_validator.PathPermissions | None,
-    path_label: str,
-) -> str:
-    """在单个可读文件中搜索正则匹配行并返回格式化结果。"""
-    if validator is not None and not validator.is_readable(resolved):
-        raise PermissionError(f"没有权限搜索文件：{path_label}")
-    try:
-        text = resolved.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
-        return "(无匹配)"
-    append_match, finish = _create_search_result_collector()
-    file_name = resolved.name
-    for line_number, line_text in enumerate(text.splitlines(), start=1):
-        if regex.search(line_text) and not append_match(
-            f"[{file_name} line{line_number}] {line_text}"
-        ):
-            break
-    return finish()
-
-
-def _search_directory(
-    directory: str,
-    regex: re.Pattern,
-    validator: egent.builtin_tools.path_validator.PathPermissions | None,
-    file_filter: str | None,
-) -> str:
-    """在目录中递归搜索文件内容和文件名匹配。"""
-    root = _open_directory(directory, validator)
-    append_match, finish = _create_search_result_collector()
-    for file_path in sorted(root.rglob("*"), key=lambda path: path.as_posix().lower()):
-        if not file_path.is_file():
-            continue
-        resolved_file_path = file_path.resolve()
-        if not resolved_file_path.is_relative_to(root):
-            continue
-        if validator is not None and not validator.is_searchable(resolved_file_path):
-            continue
-        if file_filter is not None and not fnmatch.fnmatch(file_path.name, file_filter):
-            continue
-        relative_file_text = resolved_file_path.relative_to(root).as_posix()
-        if regex.search(relative_file_text) and not append_match(f"[{relative_file_text}]"):
-            break
-        try:
-            text = resolved_file_path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue
-        for line_number, line_text in enumerate(text.splitlines(), start=1):
-            if regex.search(line_text) and not append_match(
-                f"[{relative_file_text} line{line_number}] {line_text}"
-            ):
-                return finish()
-    return finish()
-
-
 def get_search_directory_tool(
     validator: egent.builtin_tools.path_validator.PathPermissions | None = None,
     name: str = "search_directory",
@@ -279,7 +227,7 @@ def get_search_directory_tool(
     """生成预配置的目录搜索工具（仅搜索可发现且可读的文件）。"""
     working_directory = Path.cwd()
     tool_description = description or (
-        "在指定目录中按正则表达式逐行搜索文件或文件名并输出（仅搜索可发现且可读的文件）"
+        "在指定目录中深度优先遍历，按正则表达式逐行搜索文件内容（仅搜索可发现且可读的文件）"
     )
 
     def search_directory(
@@ -291,7 +239,65 @@ def get_search_directory_tool(
             regex = re.compile(pattern)
         except re.error as regex_error:
             raise ValueError(f"无效的正则表达式：{regex_error}") from regex_error
-        return _search_directory(directory, regex, validator, file_filter)
+        root = _open_directory(directory, validator)
+        deadline_monotonic = (
+            time.monotonic() + egent.limits.SEARCH_DIRECTORY_TIMEOUT_SECONDS
+        )
+        matched_lines: list[str] = []
+        timed_out = False
+
+        def visit_directory(directory_path: Path) -> None:
+            nonlocal timed_out
+            if timed_out or time.monotonic() >= deadline_monotonic:
+                timed_out = True
+                return
+            try:
+                entries = sorted(
+                    directory_path.iterdir(),
+                    key=lambda entry_path: (not entry_path.is_dir(), entry_path.name.lower()),
+                )
+            except OSError:
+                return
+            for entry_path in entries:
+                if timed_out or time.monotonic() >= deadline_monotonic:
+                    timed_out = True
+                    return
+                if entry_path.is_symlink():
+                    continue
+                resolved_entry_path = entry_path.resolve()
+                if not resolved_entry_path.is_relative_to(root):
+                    continue
+                if validator is not None and not validator.is_discoverable(resolved_entry_path):
+                    continue
+                if entry_path.is_dir():
+                    visit_directory(entry_path)
+                    continue
+                if not entry_path.is_file():
+                    continue
+                if validator is not None and not validator.is_readable(resolved_entry_path):
+                    continue
+                if file_filter is not None and not fnmatch.fnmatch(entry_path.name, file_filter):
+                    continue
+                relative_path_label = resolved_entry_path.relative_to(root).as_posix()
+                file_deadline_monotonic = min(
+                    time.monotonic() + egent.limits.SEARCH_FILE_TIMEOUT_SECONDS,
+                    deadline_monotonic,
+                )
+                file_matches, file_timed_out = _collect_search_matches(
+                    resolved_entry_path,
+                    regex,
+                    file_deadline_monotonic,
+                    lambda line_number, line_text, path_label=relative_path_label: (
+                        f"[{path_label} line{line_number}] {line_text}"
+                    ),
+                )
+                matched_lines.extend(file_matches)
+                if file_timed_out:
+                    timed_out = True
+                    return
+
+        visit_directory(root)
+        return _format_search_result(matched_lines, timed_out)
 
     search_directory.__name__ = name
     search_directory.__doc__ = (
@@ -311,7 +317,7 @@ def get_search_file_tool(
     """生成预配置的单文件搜索工具（仅搜索可读文件）。"""
     working_directory = Path.cwd()
     tool_description = description or (
-        "在指定文件中按正则表达式逐行搜索并输出（仅搜索可读文件）"
+        "在指定文件中按正则表达式流式逐行搜索并输出（仅搜索可读文件）"
     )
 
     def search_file(
@@ -325,7 +331,16 @@ def get_search_file_tool(
         resolved = egent.builtin_tools.path_validator.resolve_path(path)
         if not resolved.is_file():
             raise FileNotFoundError(f"文件不存在：{path}")
-        return _search_file_content(resolved, regex, validator, path)
+        if validator is not None and not validator.is_readable(resolved):
+            raise PermissionError(f"没有权限搜索文件：{path}")
+        deadline_monotonic = time.monotonic() + egent.limits.SEARCH_FILE_TIMEOUT_SECONDS
+        matched_lines, timed_out = _collect_search_matches(
+            resolved,
+            regex,
+            deadline_monotonic,
+            lambda line_number, line_text: f"[line{line_number}] {line_text}",
+        )
+        return _format_search_result(matched_lines, timed_out)
 
     search_file.__name__ = name
     search_file.__doc__ = (

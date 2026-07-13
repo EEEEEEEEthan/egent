@@ -234,17 +234,18 @@ def test_search_directory_matches_line_content(tmp_path: Path, monkeypatch) -> N
     assert result == "[alpha.txt line1] hello\n[alpha.txt line3] hello again"
 
 
-def test_search_directory_matches_filename(tmp_path: Path, monkeypatch) -> None:
-    """search_directory 应匹配文件名。"""
+def test_search_directory_nested_file(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 应深度优先搜索嵌套文件。"""
     monkeypatch.chdir(tmp_path)
-    target_file = tmp_path / "needle.txt"
-    target_file.write_text("plain text\n", encoding="utf-8")
-    (tmp_path / "other.txt").write_text("plain text\n", encoding="utf-8")
+    nested_directory = tmp_path / "sub"
+    nested_directory.mkdir()
+    (nested_directory / "nested.txt").write_text("findme\n", encoding="utf-8")
+    (tmp_path / "root.txt").write_text("other\n", encoding="utf-8")
 
     search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
-    result = search_directory("needle")
+    result = search_directory("findme")
 
-    assert result == "[needle.txt]"
+    assert result == "[sub/nested.txt line1] findme"
 
 
 def test_search_directory_respects_validator(tmp_path: Path, monkeypatch) -> None:
@@ -282,7 +283,7 @@ def test_search_file_matches_line_content(tmp_path: Path, monkeypatch) -> None:
     search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
     result = search_file("error", path="data.log")
 
-    assert result == "[data.log line1] error: timeout\n[data.log line3] error: retry"
+    assert result == "[line1] error: timeout\n[line3] error: retry"
 
 
 def test_search_file_no_match(tmp_path: Path, monkeypatch) -> None:
@@ -325,7 +326,7 @@ def test_search_file_allows_readable_but_not_discoverable(tmp_path: Path, monkey
     )
     result = search_file("classified", path="secret/private.txt")
 
-    assert result == "[private.txt line1] classified data"
+    assert result == "[line1] classified data"
 
 
 def test_search_directory_skips_not_discoverable(tmp_path: Path, monkeypatch) -> None:
@@ -358,8 +359,11 @@ def test_search_directory_filter_glob(tmp_path: Path, monkeypatch) -> None:
     assert "c.py" not in result
 
 
-def test_search_file_truncates_long_results(tmp_path: Path, monkeypatch) -> None:
-    """search_file 超出字符上限时应提前截断。"""
+def test_search_file_returns_full_matches_without_early_truncation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """search_file 应返回完整匹配串，超长截断交给 agent 消息层。"""
     monkeypatch.chdir(tmp_path)
     max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
     match_line = "x" * max_chars
@@ -370,15 +374,18 @@ def test_search_file_truncates_long_results(tmp_path: Path, monkeypatch) -> None
     )
     search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
 
-    result = search_file("x+", path="many.txt")
+    result = search_file("x+|tail match", path="many.txt")
 
-    assert "内容太长被截断" in result
-    assert "搜索结果已提前截断" in result
-    assert "tail match" not in result
+    assert "搜索结果已提前截断" not in result
+    assert "tail match" in result
+    assert result.count(match_line) == 2
 
 
-def test_search_directory_truncates_long_results(tmp_path: Path, monkeypatch) -> None:
-    """search_directory 超出字符上限时应提前截断。"""
+def test_search_directory_returns_full_matches_without_early_truncation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """search_directory 应返回完整匹配串，超长截断交给 agent 消息层。"""
     monkeypatch.chdir(tmp_path)
     max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
     match_line = "y" * max_chars
@@ -388,6 +395,32 @@ def test_search_directory_truncates_long_results(tmp_path: Path, monkeypatch) ->
     search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
     result = search_directory("y")
 
-    assert "内容太长被截断" in result
-    assert "搜索结果已提前截断" in result
-    assert "second.txt" not in result
+    assert "搜索结果已提前截断" not in result
+    assert "second.txt" in result
+
+
+def test_search_file_reports_timeout(tmp_path: Path, monkeypatch) -> None:
+    """search_file 超时时应附带超时提示。"""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data.txt").write_text("match\nmatch\n", encoding="utf-8")
+    monkeypatch.setattr(egent.limits, "SEARCH_FILE_TIMEOUT_SECONDS", 0)
+    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+
+    result = search_file("match", path="data.txt")
+
+    assert result.startswith("(搜索超时)")
+
+
+def test_search_directory_reports_timeout(tmp_path: Path, monkeypatch) -> None:
+    """search_directory 超时时应附带超时提示。"""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "a.txt").write_text("match\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("match\n", encoding="utf-8")
+    monkeypatch.setattr(egent.limits, "SEARCH_DIRECTORY_TIMEOUT_SECONDS", 0)
+    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(
+        _under_root(tmp_path),
+    )
+
+    result = search_directory("match")
+
+    assert result.startswith("(搜索超时)")
