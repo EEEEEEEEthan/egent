@@ -32,7 +32,7 @@ async def async_main() -> int:
     ethan = egent.agent.Agent(
         settings="gpt5",
         system_prompt="你是ethan，你是这个项目的主程",
-        skills=[_EXAMPLE_GREET_SKILL],
+        skills=(_EXAMPLE_GREET_SKILL,),
         tools=(),
         path_permissions=egent.builtin_tools.path_validator.PathPermissions(
             discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
