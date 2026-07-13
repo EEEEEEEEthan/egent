@@ -1,7 +1,7 @@
 """egent 包。"""
 
-import egent.agent
-from . import builtin_tools
+import egent.agent as agent
+import egent.builtin_tools as builtin_tools
 
 __all__ = [
     "agent",

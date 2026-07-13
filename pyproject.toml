@@ -32,7 +32,17 @@ pythonpath = ["src"]
 line-length = 160
 
 [tool.ruff.lint]
+extend-select = ["TID"]
 ignore = ["PLR2004"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.pylint.main]
+source-roots = ["src"]
+
+[tool.pylint."messages control"]
+disable = ["consider-using-from-import"]
 
 [tool.pylint.format]
 max-line-length = 160

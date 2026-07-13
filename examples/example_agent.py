@@ -12,14 +12,14 @@ from pathlib import Path
 
 import _common
 import conversation_printer
+import egent.agent
 import egent.builtin_tools.path_validator
-from egent.agent import Agent
 
 _EXAMPLE_GREET_SKILL = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "example-greet"
 
 
 async def run_turn(
-    agent: Agent,
+    agent: egent.agent.Agent,
     printer: conversation_printer.ConversationPrinter,
 ) -> None:
     """运行一轮交互：收集用户输入并发送请求。"""
@@ -29,7 +29,7 @@ async def run_turn(
 
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
-    ethan = Agent(
+    ethan = egent.agent.Agent(
         "gpt5",
         skills=[_EXAMPLE_GREET_SKILL],
         tools=[_common.reload_modules],

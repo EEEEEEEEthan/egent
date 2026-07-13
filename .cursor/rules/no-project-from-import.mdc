@@ -1,0 +1,26 @@
+---
+description: 本项目内模块禁止 from-import，须用 import egent.xxx
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# 禁止对本项目模块使用 from-import
+
+对 `egent` 包（及仓库内其他本地模块）禁止 `from … import …`（含相对导入），须使用完整模块导入后通过限定名访问。包 `__init__` 再导出可用 `import … as …`。
+
+```python
+# ❌ BAD
+from egent.agent import Agent
+from egent.builtin_tools import path_validator
+from . import builtin_tools
+
+# ✅ GOOD
+import egent.agent
+import egent.builtin_tools.path_validator
+import egent.builtin_tools.file_system_tools as file_system_tools
+
+agent = egent.agent.Agent(...)
+rule = egent.builtin_tools.path_validator.PathPermissionRule(...)
+```
+
+标准库与第三方（如 `pathlib`、`httpx`）不受此限。`from __future__ import annotations` 允许。
