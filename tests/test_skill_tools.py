@@ -29,7 +29,7 @@ def test_build_skills_deduplicates_ids(tmp_path) -> None:
     _write_skill(first, "demo", "第一个")
     _write_skill(second, "demo", "第二个")
 
-    index, _catalog = egent.agent.build_skills([first, second])
+    index, _catalog = egent.agent.Agent._Agent__build_skills([first, second])
 
     assert set(index) == {"demo", "demo_2"}
     assert index["demo"] == first.resolve()
@@ -41,7 +41,7 @@ def test_build_skills_catalog_includes_descriptions(tmp_path) -> None:
     skill_dir = tmp_path / "git-commit"
     _write_skill(skill_dir, "git-commit", "执行提交")
 
-    _index, catalog = egent.agent.build_skills([skill_dir])
+    _index, catalog = egent.agent.Agent._Agent__build_skills([skill_dir])
 
     assert "git-commit: 执行提交" in catalog
 
@@ -53,7 +53,7 @@ def test_learn_skill_outputs_tree_and_skill_md(tmp_path) -> None:
     (skill_dir / "scripts").mkdir()
     (skill_dir / "scripts" / "run.py").write_text("print('ok')\n", encoding="utf-8")
 
-    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.Agent._Agent__build_skills([skill_dir])[0])
     result = learn_skill("demo")
 
     tree_index = result.index("demo/")
@@ -72,7 +72,7 @@ def test_learn_skill_reads_relative_file(tmp_path) -> None:
     rules.mkdir()
     (rules / "detail.md").write_text("# 细则\n禁止缩写\n", encoding="utf-8")
 
-    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.Agent._Agent__build_skills([skill_dir])[0])
     result = learn_skill("demo", "rules/detail.md")
 
     assert result.startswith("# 技能文件: demo/rules/detail.md")
@@ -88,7 +88,7 @@ def test_learn_skill_rejects_path_escape(tmp_path) -> None:
     outside = tmp_path / "secret.md"
     outside.write_text("secret\n", encoding="utf-8")
 
-    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    learn_skill, _ = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.Agent._Agent__build_skills([skill_dir])[0])
     with pytest.raises(ValueError, match="越界"):
         learn_skill("demo", "../secret.md")
 
@@ -107,7 +107,7 @@ def test_run_skill_script_only_allows_skill_directory(tmp_path) -> None:
     )
     _write_skill(skill_dir, "demo", "演示")
 
-    _, run_skill_script = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    _, run_skill_script = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.Agent._Agent__build_skills([skill_dir])[0])
 
     with pytest.raises(ValueError, match="越界"):
         run_skill_script("demo", "../outside.py")
@@ -141,7 +141,7 @@ def test_skill_tools_register_with_resolve_tools(tmp_path) -> None:
     """技能工具应能被 resolve_tools 正常注册。"""
     skill_dir = tmp_path / "demo"
     _write_skill(skill_dir, "demo", "演示")
-    tools = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.build_skills([skill_dir])[0])
+    tools = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.Agent._Agent__build_skills([skill_dir])[0])
     api_tools, _handlers = egent.tool.resolve_tools(tools)
 
     assert {tool["function"]["name"] for tool in api_tools} == {

@@ -6,7 +6,6 @@ import asyncio
 import logging
 import pathlib
 import re
-from src.egent.tool import ToolCallable
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from copy import deepcopy
@@ -65,81 +64,6 @@ def _configure_logging() -> None:
 
 
 _configure_logging()
-
-
-def _sanitize_tool_call_dump(tool_call_dump: dict[str, Any]) -> dict[str, Any]:
-    function_payload = tool_call_dump.get("function")
-    if not isinstance(function_payload, dict):
-        return tool_call_dump
-    arguments = function_payload.get("arguments")
-    if not isinstance(arguments, str):
-        return tool_call_dump
-    sanitized_dump = dict(tool_call_dump)
-    sanitized_dump["function"] = {
-        **function_payload,
-        "arguments": egent.tool.sanitize_tool_arguments_json(arguments),
-    }
-    return sanitized_dump
-
-
-def build_skills(
-    skill_paths: Iterable[str | pathlib.Path],
-) -> tuple[dict[str, pathlib.Path], str]:
-    """构建技能索引与 system 摘要，单次读取各 SKILL.md。"""
-    index: dict[str, pathlib.Path] = {}
-    seen_ids: dict[str, int] = {}
-    catalog_lines = ["可用技能（使用 learn_skill 查看详情，run_skill_script 运行脚本）:"]
-    for raw_path in skill_paths:
-        resolved = pathlib.Path(raw_path).resolve()
-        skill_dir = resolved.parent if resolved.name == "SKILL.md" and resolved.is_file() else resolved
-        skill_md = skill_dir / "SKILL.md"
-        frontmatter = _parse_skill_frontmatter(skill_md.read_text(encoding="utf-8")) if skill_md.is_file() else {}
-        base_id = frontmatter.get("name", "").strip() or skill_dir.name
-        if base_id in seen_ids:
-            seen_ids[base_id] += 1
-            skill_id = f"{base_id}_{seen_ids[base_id]}"
-        else:
-            seen_ids[base_id] = 1
-            skill_id = base_id
-        index[skill_id] = skill_dir
-        catalog_lines.append(f"- {skill_id}: {frontmatter.get('description', '').strip()}")
-    return index, "\n".join(catalog_lines)
-
-
-def _parse_skill_frontmatter(content: str) -> dict[str, str]:
-    match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
-    if not match:
-        return {}
-    fields: dict[str, str] = {}
-    for line in match.group(1).splitlines():
-        if ":" in line:
-            key, _, value = line.partition(":")
-            fields[key.strip()] = value.strip()
-    return fields
-
-
-async def _run_with_network_retry[_Result](operation: Callable[[], Awaitable[_Result]]) -> _Result:
-    """网络异常时静默重试，不写入对话上下文。"""
-    last_error: BaseException | None = None
-    for attempt_index in range(_REQUEST_RETRY_COUNT):
-        try:
-            return await operation()
-        except _RETRYABLE_NETWORK_EXCEPTIONS as error:
-            if isinstance(error, APIStatusError) and error.status_code < 500:
-                raise
-            last_error = error
-            if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
-                break
-            _logger.warning(
-                "网络请求失败，%.0fs 后重试 (%d/%d): %s",
-                _REQUEST_RETRY_DELAY_SECONDS,
-                attempt_index + 1,
-                _REQUEST_RETRY_COUNT,
-                error,
-            )
-            await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
-    assert last_error is not None
-    raise last_error
 
 
 @dataclass(frozen=True)
@@ -205,11 +129,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             base_url=model_settings.base_url,
         )
         self.model = model_settings.model_name
-        self.tools: tuple[egent.tool.ToolCallable, ...] = tuple[ToolCallable, ...](tools)
+        self.tools: tuple[egent.tool.ToolCallable, ...] = tuple[egent.tool.ToolCallable, ...](tools)
         self.path_permissions = path_permissions
         self.__messages: list[ChatMessage] = []
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
-        skill_index, skill_catalog = build_skills(skills)
+        skill_index, skill_catalog = self.__build_skills(skills)
         self.__builtin_tools = [
             *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
             *egent.builtin_tools.file_system_tools.get_file_tools(path_permissions),
@@ -299,7 +223,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             if content:
                 summary_parts.append(f"[{role}]\n{content}")
 
-        response = await _run_with_network_retry(
+        response = await self.__run_with_network_retry(
             lambda: self.__client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -327,6 +251,81 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         extra_text = f" | extra={extra}" if extra else ""
         _logger.info("[%s %s] %s%s", datetime.now().strftime("%H:%M:%S"), role, content, extra_text)
         return message
+
+    @staticmethod
+    def __sanitize_tool_call_dump(tool_call_dump: dict[str, Any]) -> dict[str, Any]:
+        function_payload = tool_call_dump.get("function")
+        if not isinstance(function_payload, dict):
+            return tool_call_dump
+        arguments = function_payload.get("arguments")
+        if not isinstance(arguments, str):
+            return tool_call_dump
+        sanitized_dump = dict(tool_call_dump)
+        sanitized_dump["function"] = {
+            **function_payload,
+            "arguments": egent.tool.sanitize_tool_arguments_json(arguments),
+        }
+        return sanitized_dump
+
+    @staticmethod
+    def __build_skills(
+        skill_paths: Iterable[str | pathlib.Path],
+    ) -> tuple[dict[str, pathlib.Path], str]:
+        """构建技能索引与 system 摘要，单次读取各 SKILL.md。"""
+        index: dict[str, pathlib.Path] = {}
+        seen_ids: dict[str, int] = {}
+        catalog_lines = ["可用技能（使用 learn_skill 查看详情，run_skill_script 运行脚本）:"]
+        for raw_path in skill_paths:
+            resolved = pathlib.Path(raw_path).resolve()
+            skill_dir = resolved.parent if resolved.name == "SKILL.md" and resolved.is_file() else resolved
+            skill_md = skill_dir / "SKILL.md"
+            frontmatter = Agent.__parse_skill_frontmatter(skill_md.read_text(encoding="utf-8")) if skill_md.is_file() else {}
+            base_id = frontmatter.get("name", "").strip() or skill_dir.name
+            if base_id in seen_ids:
+                seen_ids[base_id] += 1
+                skill_id = f"{base_id}_{seen_ids[base_id]}"
+            else:
+                seen_ids[base_id] = 1
+                skill_id = base_id
+            index[skill_id] = skill_dir
+            catalog_lines.append(f"- {skill_id}: {frontmatter.get('description', '').strip()}")
+        return index, "\n".join(catalog_lines)
+
+    @staticmethod
+    def __parse_skill_frontmatter(content: str) -> dict[str, str]:
+        match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+        if not match:
+            return {}
+        fields: dict[str, str] = {}
+        for line in match.group(1).splitlines():
+            if ":" in line:
+                key, _, value = line.partition(":")
+                fields[key.strip()] = value.strip()
+        return fields
+
+    @staticmethod
+    async def __run_with_network_retry[_Result](operation: Callable[[], Awaitable[_Result]]) -> _Result:
+        """网络异常时静默重试，不写入对话上下文。"""
+        last_error: BaseException | None = None
+        for attempt_index in range(_REQUEST_RETRY_COUNT):
+            try:
+                return await operation()
+            except _RETRYABLE_NETWORK_EXCEPTIONS as error:
+                if isinstance(error, APIStatusError) and error.status_code < 500:
+                    raise
+                last_error = error
+                if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
+                    break
+                _logger.warning(
+                    "网络请求失败，%.0fs 后重试 (%d/%d): %s",
+                    _REQUEST_RETRY_DELAY_SECONDS,
+                    attempt_index + 1,
+                    _REQUEST_RETRY_COUNT,
+                    error,
+                )
+                await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
+        assert last_error is not None
+        raise last_error
 
     async def __request(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self,
@@ -364,7 +363,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 "assistant",
                 reply_text,
                 tool_calls=[
-                    _sanitize_tool_call_dump(tool_call.model_dump())
+                    self.__sanitize_tool_call_dump(tool_call.model_dump())
                     for tool_call in tool_calls
                 ],
             )

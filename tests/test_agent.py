@@ -15,7 +15,6 @@ from openai import APIStatusError
 import egent.agent
 import egent.builtin_tools.path_validator
 import egent.tool
-from egent.agent import _run_with_network_retry
 
 
 def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
@@ -61,7 +60,8 @@ async def test_run_with_network_retry_recovers_from_transient_error() -> None:
             raise httpx.RemoteProtocolError("peer closed")
         return "ok"
 
-    result = await _run_with_network_retry(operation)
+    agent = egent.agent.Agent.__new__(egent.agent.Agent)
+    result = await agent._Agent__run_with_network_retry(operation)
 
     assert result == "ok"
     assert attempt_count == 3
@@ -73,8 +73,9 @@ async def test_run_with_network_retry_reraises_after_exhausted_attempts() -> Non
     async def operation() -> str:
         raise httpx.RemoteProtocolError("peer closed")
 
+    agent = egent.agent.Agent.__new__(egent.agent.Agent)
     with pytest.raises(httpx.RemoteProtocolError, match="peer closed"):
-        await _run_with_network_retry(operation)
+        await agent._Agent__run_with_network_retry(operation)
 
 
 @pytest.mark.asyncio
@@ -91,8 +92,9 @@ async def test_run_with_network_retry_does_not_retry_client_errors() -> None:
             body=None,
         )
 
+    agent = egent.agent.Agent.__new__(egent.agent.Agent)
     with pytest.raises(APIStatusError):
-        await _run_with_network_retry(operation)
+        await agent._Agent__run_with_network_retry(operation)
 
     assert attempt_count == 1
 
