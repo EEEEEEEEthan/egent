@@ -124,7 +124,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             tools: 自定义工具列表，构造后固定不变。
             path_permissions: 文件工具路径权限，构造后固定不变；``None`` 表示不限制。
         """
-        self.busy = False
         self.name = name
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
@@ -206,9 +205,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     async def send(self) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
-        if self.busy:
-            raise RuntimeError(f"Agent {self.name} is busy")
-        self.busy = True
         while True:
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
             message = completion.choices[0].message
@@ -217,7 +213,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             if not tool_calls:
                 self.__add_message("assistant", reply_text)
                 self.__emit_event(TurnCompleted(reply_text))
-                self.busy = False
                 return
             self.__add_message(
                 "assistant",
@@ -237,7 +232,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 try:
                     handler = self.__tool_handlers.get(function_name)
                     if handler is None:
-                        self.busy = False
                         raise ValueError(f"工具未注册: {function_name}")
                     handler_result = handler(function_arguments)
                     if isinstance(handler_result, Awaitable):
@@ -301,8 +295,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加消息原文，不截断。供框架写入 agent 回复等。"""
-        if self.busy:
-            raise RuntimeError(f"Agent {self.name} is busy")
         message: ChatMessage = {"role": role, "content": content, **extra}
         self.__messages.append(message)
         extra_text = f" | extra={extra}" if extra else ""
