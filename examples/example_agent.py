@@ -8,15 +8,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import importlib
+import sys
 from pathlib import Path
 
-import _common
 import conversation_printer
 import egent.agent
 import egent.builtin_tools.path_validator
 
 _EXAMPLE_GREET_SKILL = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "example-greet"
-
 
 async def run_turn(
     agent: egent.agent.Agent,
@@ -26,14 +27,13 @@ async def run_turn(
     agent.add_message("user", input(">>> ").strip())
     await printer.send()
 
-
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     ethan = egent.agent.Agent(
         settings="gpt5",
-        system_prompt="你是简洁、务实的编程助手。",
+        system_prompt="你是ethan，你是这个项目的主程",
         skills=[_EXAMPLE_GREET_SKILL],
-        tools=[_common.reload_modules],
+        tools=(),
         path_permissions=egent.builtin_tools.path_validator.PathPermissions(
             discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
                 whitelist=("*",),
@@ -45,7 +45,7 @@ async def async_main() -> int:
             ),
             editable=egent.builtin_tools.path_validator.PathPermissionRule(
                 whitelist=("*",),
-                blacklist=(),
+                blacklist=("*",),
             ),
         ),
     )
@@ -55,4 +55,4 @@ async def async_main() -> int:
 
 
 if __name__ == "__main__":
-    _common.run_cli(async_main)
+    raise SystemExit(asyncio.run(async_main()))
