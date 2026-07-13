@@ -242,18 +242,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         """移除流式事件监听器。"""
         self.__event_listeners.remove(listener)
 
-    def __emit_event(self, event: AgentEvent) -> None:
-        for listener in self.__event_listeners:
-            listener(event)
-
-    def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
-        """追加消息原文，不截断。供框架写入 agent 回复等。"""
-        message: ChatMessage = {"role": role, "content": content, **extra}
-        self.__messages.append(message)
-        extra_text = f" | extra={extra}" if extra else ""
-        _logger.info("[%s %s] %s%s", datetime.now().strftime("%H:%M:%S"), role, content, extra_text)
-        return message
-
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
         # 以 TOOL_RESULT_MAX_CHARS 作为截断阈值，超出部分保存到 .egent/.temp/ 临时文件。
@@ -285,6 +273,60 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     async def request(self) -> None:
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         await self.__request()
+
+    async def summarize(self) -> str:
+        """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""
+        system_prefix: list[ChatMessage] = []
+        for message in self.__messages:
+            if message.get("role") != "system":
+                break
+            system_prefix.append(message)
+
+        rest = self.__messages[len(system_prefix):]
+        if not rest:
+            return ""
+
+        summary_parts: list[str] = []
+        for message in rest:
+            role = message.get("role", "?")
+            content = message.get("content") or ""
+            if role == "assistant" and message.get("tool_calls"):
+                tool_names = [
+                    tool_call["function"]["name"]
+                    for tool_call in message["tool_calls"]
+                ]
+                summary_parts.append(f"[assistant tool_calls: {', '.join(tool_names)}]")
+            if content:
+                summary_parts.append(f"[{role}]\n{content}")
+
+        response = await _run_with_network_retry(
+            lambda: self.__client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": (
+                        "请将以下对话历史压缩为简洁摘要，保留关键决策、已完成工作、"
+                        "当前代码状态与待解决问题。"
+                    )},
+                    {"role": "user", "content": "\n\n".join(summary_parts)},
+                ],
+            ),
+        )
+        summary = response.choices[0].message.content or ""
+        self.__messages = deepcopy(system_prefix)
+        self.__add_message("system", f"此前工作摘要:\n{summary}")
+        return summary
+
+    def __emit_event(self, event: AgentEvent) -> None:
+        for listener in self.__event_listeners:
+            listener(event)
+
+    def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
+        """追加消息原文，不截断。供框架写入 agent 回复等。"""
+        message: ChatMessage = {"role": role, "content": content, **extra}
+        self.__messages.append(message)
+        extra_text = f" | extra={extra}" if extra else ""
+        _logger.info("[%s %s] %s%s", datetime.now().strftime("%H:%M:%S"), role, content, extra_text)
+        return message
 
     async def __request(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self,
@@ -377,45 +419,3 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             if reply_text:
                 self.__emit_event(TextDelta(reply_text))
             return response
-
-    async def summarize(self) -> str:
-        """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""
-        system_prefix: list[ChatMessage] = []
-        for message in self.__messages:
-            if message.get("role") != "system":
-                break
-            system_prefix.append(message)
-
-        rest = self.__messages[len(system_prefix):]
-        if not rest:
-            return ""
-
-        summary_parts: list[str] = []
-        for message in rest:
-            role = message.get("role", "?")
-            content = message.get("content") or ""
-            if role == "assistant" and message.get("tool_calls"):
-                tool_names = [
-                    tool_call["function"]["name"]
-                    for tool_call in message["tool_calls"]
-                ]
-                summary_parts.append(f"[assistant tool_calls: {', '.join(tool_names)}]")
-            if content:
-                summary_parts.append(f"[{role}]\n{content}")
-
-        response = await _run_with_network_retry(
-            lambda: self.__client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": (
-                        "请将以下对话历史压缩为简洁摘要，保留关键决策、已完成工作、"
-                        "当前代码状态与待解决问题。"
-                    )},
-                    {"role": "user", "content": "\n\n".join(summary_parts)},
-                ],
-            ),
-        )
-        summary = response.choices[0].message.content or ""
-        self.__messages = deepcopy(system_prefix)
-        self.__add_message("system", f"此前工作摘要:\n{summary}")
-        return summary
