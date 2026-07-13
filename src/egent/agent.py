@@ -201,9 +201,52 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             )
         return self.__add_message(role, content, **extra)
 
-    async def send(self) -> None:
+    async def send(self) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
-        await self.__send()
+        self.busy = True
+        while True:
+            completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
+            message = completion.choices[0].message
+            reply_text = (message.content or "").strip()
+            tool_calls = message.tool_calls or []
+            if not tool_calls:
+                self.__add_message("assistant", reply_text)
+                self.__emit_event(TurnCompleted(reply_text))
+                self.busy = False
+                return
+            self.__add_message(
+                "assistant",
+                reply_text,
+                tool_calls=[
+                    self.__sanitize_tool_call_dump(tool_call.model_dump())
+                    for tool_call in tool_calls
+                ],
+            )
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_arguments = egent.tool.sanitize_tool_arguments_json(
+                    tool_call.function.arguments,
+                )
+                self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
+                is_exception = False
+                try:
+                    handler = self.__tool_handlers.get(function_name)
+                    if handler is None:
+                        self.busy = False
+                        raise ValueError(f"工具未注册: {function_name}")
+                    handler_result = handler(function_arguments)
+                    if isinstance(handler_result, Awaitable):
+                        handler_result = await handler_result
+                except Exception as exception:  # pylint: disable=broad-exception-caught
+                    handler_result = str(exception)
+                    is_exception = True
+                tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
+                self.__emit_event(ToolCallExecuted(
+                    name=function_name,
+                    arguments=function_arguments,
+                    result=tool_message["content"],
+                    is_exception=is_exception,
+                ))
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""
@@ -333,67 +376,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
         assert last_error is not None
         raise last_error
-
-    async def __send(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-        self,
-    ) -> None:
-        while True:
-            for attempt_index in range(_REQUEST_RETRY_COUNT):
-                try:
-                    completion = await self.__fetch_chat_completion()
-                    break
-                except _RETRYABLE_NETWORK_EXCEPTIONS as error:
-                    if isinstance(error, APIStatusError) and error.status_code < 500:
-                        raise
-                    if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
-                        raise
-                    _logger.warning(
-                        "网络请求失败，%.0fs 后重试 (%d/%d): %s",
-                        _REQUEST_RETRY_DELAY_SECONDS,
-                        attempt_index + 1,
-                        _REQUEST_RETRY_COUNT,
-                        error,
-                    )
-                    await asyncio.sleep(_REQUEST_RETRY_DELAY_SECONDS)
-            message = completion.choices[0].message
-            reply_text = (message.content or "").strip()
-            tool_calls = message.tool_calls or []
-            if not tool_calls:
-                self.__add_message("assistant", reply_text)
-                self.__emit_event(TurnCompleted(reply_text))
-                return
-            self.__add_message(
-                "assistant",
-                reply_text,
-                tool_calls=[
-                    self.__sanitize_tool_call_dump(tool_call.model_dump())
-                    for tool_call in tool_calls
-                ],
-            )
-            for tool_call in tool_calls:
-                function_name = tool_call.function.name
-                function_arguments = egent.tool.sanitize_tool_arguments_json(
-                    tool_call.function.arguments,
-                )
-                self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
-                is_exception = False
-                try:
-                    handler = self.__tool_handlers.get(function_name)
-                    if handler is None:
-                        raise ValueError(f"工具未注册: {function_name}")
-                    handler_result = handler(function_arguments)
-                    if isinstance(handler_result, Awaitable):
-                        handler_result = await handler_result
-                except Exception as exception:  # pylint: disable=broad-exception-caught
-                    handler_result = str(exception)
-                    is_exception = True
-                tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
-                self.__emit_event(ToolCallExecuted(
-                    name=function_name,
-                    arguments=function_arguments,
-                    result=tool_message["content"],
-                    is_exception=is_exception,
-                ))
 
     async def __fetch_chat_completion(self) -> Any:
         """流式请求 Chat Completion；工具参数解析失败时回退为非流式。"""
