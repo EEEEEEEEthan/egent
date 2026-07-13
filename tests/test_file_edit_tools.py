@@ -59,7 +59,7 @@ def _reject_path_prefix(
 def test_create_file_writes_content(tmp_path: Path) -> None:
     """create_file 应创建文件并写入内容。"""
     target_file = tmp_path / "notes.txt"
-    create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_under_root(tmp_path))
+    create_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).create_file
 
     result = create_file(str(target_file), "hello")
 
@@ -70,7 +70,7 @@ def test_create_file_writes_content(tmp_path: Path) -> None:
 def test_create_file_accepts_relative_path(tmp_path: Path, monkeypatch) -> None:
     """create_file 应将相对路径以工作目录为基准解析。"""
     monkeypatch.chdir(tmp_path)
-    create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_under_root(tmp_path))
+    create_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).create_file
 
     result = create_file("notes.txt", "hello")
 
@@ -82,7 +82,7 @@ def test_create_file_rejects_existing_file(tmp_path: Path) -> None:
     """create_file 在文件已存在时应抛出异常。"""
     sample_file = tmp_path / "notes.txt"
     sample_file.write_text("old", encoding="utf-8")
-    create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_under_root(tmp_path))
+    create_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).create_file
 
     with pytest.raises(FileExistsError, match="文件已存在"):
         create_file(str(sample_file), "new")
@@ -92,7 +92,7 @@ def test_create_file_rejects_existing_file(tmp_path: Path) -> None:
 def test_create_file_respects_validator(tmp_path: Path) -> None:
     """create_file 应拒绝 validator 不允许的路径。"""
     target_file = tmp_path / "secret" / "hidden.txt"
-    create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    create_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).create_file
 
     with pytest.raises(PermissionError, match="没有权限"):
         create_file(str(target_file), "secret")
@@ -107,7 +107,7 @@ def test_create_file_supports_multiple_roots(tmp_path: Path) -> None:
     second_root.mkdir()
     first_file = first_root / "notes.txt"
     second_file = second_root / "notes.txt"
-    create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(_under_roots(first_root, second_root))
+    create_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_roots(first_root, second_root)).create_file
 
     first_result = create_file(str(first_file), "a")
     second_result = create_file(str(second_file), "b")
@@ -122,7 +122,7 @@ def test_append_text_appends_content(tmp_path: Path) -> None:
     """append_text 应向现有文件追加文本。"""
     sample_file = tmp_path / "log.txt"
     sample_file.write_text("line1\n", encoding="utf-8")
-    append_text = egent.builtin_tools.file_system_tools.get_append_text_tool(_under_root(tmp_path))
+    append_text = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).append_text
 
     result = append_text(str(sample_file), "line2\n")
 
@@ -132,7 +132,7 @@ def test_append_text_appends_content(tmp_path: Path) -> None:
 
 def test_append_text_missing_file(tmp_path: Path) -> None:
     """append_text 在文件不存在时应抛出异常。"""
-    append_text = egent.builtin_tools.file_system_tools.get_append_text_tool(_under_root(tmp_path))
+    append_text = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).append_text
 
     with pytest.raises(FileNotFoundError, match="文件不存在"):
         append_text(str(tmp_path / "missing.txt"), "text")
@@ -144,7 +144,7 @@ def test_append_text_respects_validator(tmp_path: Path) -> None:
     secret_directory.mkdir()
     sample_file = secret_directory / "hidden.txt"
     sample_file.write_text("keep", encoding="utf-8")
-    append_text = egent.builtin_tools.file_system_tools.get_append_text_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    append_text = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).append_text
 
     with pytest.raises(PermissionError, match="没有权限"):
         append_text(str(sample_file), "more")
@@ -155,7 +155,7 @@ def test_apply_patch_replaces_single_match(tmp_path: Path) -> None:
     """apply_patch 应替换唯一匹配。"""
     sample_file = tmp_path / "alpha.txt"
     sample_file.write_text("foo bar foo", encoding="utf-8")
-    apply_patch = egent.builtin_tools.file_system_tools.get_apply_patch_tool(_under_root(tmp_path))
+    apply_patch = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).apply_patch
 
     result = apply_patch(str(sample_file), "bar", "baz")
 
@@ -167,7 +167,7 @@ def test_apply_patch_rejects_ambiguous_match(tmp_path: Path) -> None:
     """apply_patch 在多处匹配时应抛出异常。"""
     sample_file = tmp_path / "alpha.txt"
     sample_file.write_text("foo\nfoo\n", encoding="utf-8")
-    apply_patch = egent.builtin_tools.file_system_tools.get_apply_patch_tool(_under_root(tmp_path))
+    apply_patch = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).apply_patch
 
     with pytest.raises(ValueError, match="找到 2 处匹配"):
         apply_patch(str(sample_file), "foo", "bar")
@@ -180,7 +180,7 @@ def test_apply_patch_respects_validator(tmp_path: Path) -> None:
     secret_directory.mkdir()
     sample_file = secret_directory / "hidden.txt"
     sample_file.write_text("secret", encoding="utf-8")
-    apply_patch = egent.builtin_tools.file_system_tools.get_apply_patch_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    apply_patch = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).apply_patch
 
     with pytest.raises(PermissionError, match="没有权限"):
         apply_patch(str(sample_file), "secret", "public")
@@ -191,12 +191,13 @@ def test_edit_tools_share_validator(tmp_path: Path) -> None:
     """编辑工具应共用同一 validator 配置。"""
     notes_file = tmp_path / "notes.txt"
     path_validator = _reject_path_prefix(tmp_path, "secret/*")
-    create_file = egent.builtin_tools.file_system_tools.get_create_file_tool(path_validator)
-    append_text = egent.builtin_tools.file_system_tools.get_append_text_tool(path_validator)
-    apply_patch = egent.builtin_tools.file_system_tools.get_apply_patch_tool(path_validator)
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(path_validator)
-    rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(path_validator)
-    delete = egent.builtin_tools.file_system_tools.get_delete_tool(path_validator)
+    tool_set = egent.builtin_tools.file_system_tools.FileSystemToolSet(path_validator)
+    create_file = tool_set.create_file
+    append_text = tool_set.append_text
+    apply_patch = tool_set.apply_patch
+    replace = tool_set.replace
+    rewrite = tool_set.rewrite
+    delete = tool_set.delete
 
     create_result = create_file(str(notes_file), "hello")
     append_result = append_text(str(notes_file), " world")
@@ -229,7 +230,7 @@ def test_replace_single_match(tmp_path: Path) -> None:
     """replace 应替换单处匹配。"""
     sample_file = tmp_path / "text.txt"
     sample_file.write_text("hello world", encoding="utf-8")
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).replace
 
     result = replace(str(sample_file), r"world", "universe")
 
@@ -241,7 +242,7 @@ def test_replace_multiple_matches(tmp_path: Path) -> None:
     """replace 应替换所有匹配。"""
     sample_file = tmp_path / "text.txt"
     sample_file.write_text("foo bar foo bar foo", encoding="utf-8")
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).replace
 
     result = replace(str(sample_file), r"foo", "baz")
 
@@ -253,7 +254,7 @@ def test_replace_zero_matches(tmp_path: Path) -> None:
     """replace 在零匹配时应告知用户。"""
     sample_file = tmp_path / "text.txt"
     sample_file.write_text("hello world", encoding="utf-8")
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).replace
 
     result = replace(str(sample_file), r"xyz", "abc")
 
@@ -265,7 +266,7 @@ def test_replace_invalid_regex(tmp_path: Path) -> None:
     """replace 在正则无效时应抛出异常。"""
     sample_file = tmp_path / "text.txt"
     sample_file.write_text("hello", encoding="utf-8")
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).replace
 
     with pytest.raises(ValueError, match="无效的正则表达式"):
         replace(str(sample_file), r"[invalid", "x")
@@ -278,7 +279,7 @@ def test_replace_respects_validator(tmp_path: Path) -> None:
     secret_dir.mkdir()
     sample_file = secret_dir / "hidden.txt"
     sample_file.write_text("secret", encoding="utf-8")
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).replace
 
     with pytest.raises(PermissionError, match="没有权限"):
         replace(str(sample_file), r"secret", "public")
@@ -287,7 +288,7 @@ def test_replace_respects_validator(tmp_path: Path) -> None:
 
 def test_replace_missing_file(tmp_path: Path) -> None:
     """replace 在文件不存在时应抛出异常。"""
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).replace
 
     with pytest.raises(FileNotFoundError, match="文件不存在"):
         replace(str(tmp_path / "missing.txt"), r"x", "y")
@@ -298,7 +299,7 @@ def test_replace_relative_path(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "notes.txt"
     sample_file.write_text("alpha beta", encoding="utf-8")
-    replace = egent.builtin_tools.file_system_tools.get_replace_tool(_under_root(tmp_path))
+    replace = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).replace
 
     result = replace("notes.txt", r"beta", "gamma")
 
@@ -312,7 +313,7 @@ def test_rewrite_overwrite_existing(tmp_path: Path) -> None:
     """rewrite 应覆盖已存在文件。"""
     sample_file = tmp_path / "notes.txt"
     sample_file.write_text("old content", encoding="utf-8")
-    rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(_under_root(tmp_path))
+    rewrite = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).rewrite
 
     result = rewrite(str(sample_file), "new content")
 
@@ -323,7 +324,7 @@ def test_rewrite_overwrite_existing(tmp_path: Path) -> None:
 def test_rewrite_create_new_file(tmp_path: Path) -> None:
     """rewrite 应创建新文件。"""
     new_file = tmp_path / "new.txt"
-    rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(_under_root(tmp_path))
+    rewrite = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).rewrite
 
     result = rewrite(str(new_file), "fresh content")
 
@@ -334,7 +335,7 @@ def test_rewrite_create_new_file(tmp_path: Path) -> None:
 def test_rewrite_create_parent_directories(tmp_path: Path) -> None:
     """rewrite 应自动创建父目录。"""
     nested_file = tmp_path / "deep" / "nested" / "file.txt"
-    rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(_under_root(tmp_path))
+    rewrite = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).rewrite
 
     result = rewrite(str(nested_file), "deep content")
 
@@ -344,7 +345,7 @@ def test_rewrite_create_parent_directories(tmp_path: Path) -> None:
 
 def test_rewrite_respects_validator(tmp_path: Path) -> None:
     """rewrite 应拒绝 validator 不允许的路径。"""
-    rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    rewrite = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).rewrite
 
     with pytest.raises(PermissionError, match="没有权限"):
         rewrite(str(tmp_path / "secret" / "hidden.txt"), "data")
@@ -354,7 +355,7 @@ def test_rewrite_respects_validator(tmp_path: Path) -> None:
 def test_rewrite_relative_path(tmp_path: Path, monkeypatch) -> None:
     """rewrite 应将相对路径以工作目录为基准解析。"""
     monkeypatch.chdir(tmp_path)
-    rewrite = egent.builtin_tools.file_system_tools.get_rewrite_tool(_under_root(tmp_path))
+    rewrite = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).rewrite
 
     result = rewrite("notes.txt", "relative content")
 
@@ -368,7 +369,7 @@ def test_delete_file(tmp_path: Path) -> None:
     """delete 应删除文件。"""
     sample_file = tmp_path / "to_delete.txt"
     sample_file.write_text("content", encoding="utf-8")
-    delete = egent.builtin_tools.file_system_tools.get_delete_tool(_under_root(tmp_path))
+    delete = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).delete
 
     result = delete(str(sample_file))
 
@@ -384,7 +385,7 @@ def test_delete_directory(tmp_path: Path) -> None:
     nested_dir = test_dir / "nested"
     nested_dir.mkdir()
     (nested_dir / "deep.txt").write_text("deep", encoding="utf-8")
-    delete = egent.builtin_tools.file_system_tools.get_delete_tool(_under_root(tmp_path))
+    delete = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).delete
 
     result = delete(str(test_dir))
 
@@ -394,7 +395,7 @@ def test_delete_directory(tmp_path: Path) -> None:
 
 def test_delete_nonexistent_path(tmp_path: Path) -> None:
     """delete 在路径不存在时应抛出异常。"""
-    delete = egent.builtin_tools.file_system_tools.get_delete_tool(_under_root(tmp_path))
+    delete = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).delete
 
     with pytest.raises(FileNotFoundError, match="路径不存在"):
         delete(str(tmp_path / "nonexistent"))
@@ -406,7 +407,7 @@ def test_delete_respects_validator(tmp_path: Path) -> None:
     secret_dir.mkdir()
     sample_file = secret_dir / "hidden.txt"
     sample_file.write_text("secret", encoding="utf-8")
-    delete = egent.builtin_tools.file_system_tools.get_delete_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    delete = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).delete
 
     with pytest.raises(PermissionError, match="没有权限"):
         delete(str(sample_file))

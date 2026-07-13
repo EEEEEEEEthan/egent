@@ -52,7 +52,7 @@ def test_read_file_returns_content(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "hello.txt"
     sample_file.write_text("line1\nline2\nline3\n", encoding="utf-8")
-    read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
+    read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     result = read_file("hello.txt")
 
@@ -64,7 +64,7 @@ def test_read_file_with_line_and_limit(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "lines.txt"
     sample_file.write_text("a\nb\nc\nd\n", encoding="utf-8")
-    read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
+    read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     result = read_file("lines.txt", line=2, limit=2)
 
@@ -76,7 +76,7 @@ def test_read_file_with_column(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "partial.txt"
     sample_file.write_text("abcdef\n", encoding="utf-8")
-    read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
+    read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     result = read_file("partial.txt", line=1, column=3)
 
@@ -86,7 +86,7 @@ def test_read_file_with_column(tmp_path: Path, monkeypatch) -> None:
 def test_read_file_missing(tmp_path: Path, monkeypatch) -> None:
     """read_file 在文件不存在时应抛出异常。"""
     monkeypatch.chdir(tmp_path)
-    read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
+    read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     with pytest.raises(FileNotFoundError, match="文件不存在"):
         read_file("missing.txt")
@@ -97,7 +97,7 @@ def test_read_file_truncates_long_content(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "large.txt"
     sample_file.write_text("x" * (egent.limits.TOOL_RESULT_MAX_CHARS + 100), encoding="utf-8")
-    read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
+    read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     result = read_file("large.txt")
 
@@ -111,7 +111,7 @@ def test_read_file_truncation_reports_continuation_position(tmp_path: Path, monk
     max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
     sample_file = tmp_path / "large.txt"
     sample_file.write_text("x" * (max_chars + 50), encoding="utf-8")
-    read_file = egent.builtin_tools.file_system_tools.get_read_file_tool(_under_root(tmp_path))
+    read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     first_result = read_file("large.txt")
     continuation = read_file("large.txt", line=1, column=max_chars + 1)
@@ -127,7 +127,7 @@ def test_walk_files_lists_entries(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "subdir").mkdir()
     (tmp_path / "subdir" / "beta.txt").write_text("b", encoding="utf-8")
 
-    walk_files = egent.builtin_tools.file_system_tools.get_walk_files_tool(_under_root(tmp_path))
+    walk_files = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).walk_files
     result = walk_files(".")
 
     assert "alpha.txt" in result
@@ -142,7 +142,7 @@ def test_walk_files_directories_first(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "a_file.txt").write_text("a", encoding="utf-8")
     (tmp_path / "z_dir").mkdir()
 
-    walk_files = egent.builtin_tools.file_system_tools.get_walk_files_tool(_under_root(tmp_path))
+    walk_files = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).walk_files
     result = walk_files(".")
 
     m_dir_index = result.index("m_dir/")
@@ -163,7 +163,7 @@ def test_walk_files_respects_validator(tmp_path: Path, monkeypatch) -> None:
     secret_directory.mkdir()
     (secret_directory / "hidden.txt").write_text("b", encoding="utf-8")
 
-    walk_files = egent.builtin_tools.file_system_tools.get_walk_files_tool(_reject_path_prefix(tmp_path, "secret"))
+    walk_files = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret")).walk_files
     result = walk_files(".")
 
     assert "public.txt" in result
@@ -178,7 +178,7 @@ def test_walk_files_hides_git_with_glob_pattern(tmp_path: Path, monkeypatch) -> 
     (git_directory / "HEAD").write_text("ref", encoding="utf-8")
     (tmp_path / "README.md").write_text("readme", encoding="utf-8")
 
-    walk_files = egent.builtin_tools.file_system_tools.get_walk_files_tool(_reject_path_prefix(tmp_path, "*/.git"))
+    walk_files = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "*/.git")).walk_files
     result = walk_files(".", depth=0)
 
     assert "README.md" in result
@@ -216,7 +216,7 @@ def test_read_file_respects_validator(tmp_path: Path, monkeypatch) -> None:
     secret_directory.mkdir()
     secret_file = secret_directory / "hidden.txt"
     secret_file.write_text("secret", encoding="utf-8")
-    read_file_tool = egent.builtin_tools.file_system_tools.get_read_file_tool(_reject_path_prefix(tmp_path, "secret/*"))
+    read_file_tool = egent.builtin_tools.file_system_tools.FileSystemToolSet(_reject_path_prefix(tmp_path, "secret/*")).read_file
 
     with pytest.raises(PermissionError, match="没有权限"):
         read_file_tool("secret/hidden.txt")
@@ -228,7 +228,7 @@ def test_search_directory_matches_line_content(tmp_path: Path, monkeypatch) -> N
     sample_file = tmp_path / "alpha.txt"
     sample_file.write_text("hello\nworld\nhello again\n", encoding="utf-8")
 
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_directory
     result = search_directory("hello")
 
     assert result == "[alpha.txt line1] hello\n[alpha.txt line3] hello again"
@@ -242,7 +242,7 @@ def test_search_directory_nested_file(tmp_path: Path, monkeypatch) -> None:
     (nested_directory / "nested.txt").write_text("findme\n", encoding="utf-8")
     (tmp_path / "root.txt").write_text("other\n", encoding="utf-8")
 
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_directory
     result = search_directory("findme")
 
     assert result == "[sub/nested.txt line1] findme"
@@ -256,9 +256,9 @@ def test_search_directory_respects_validator(tmp_path: Path, monkeypatch) -> Non
     secret_directory.mkdir()
     (secret_directory / "hidden.txt").write_text("secret word\n", encoding="utf-8")
 
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(
         _reject_path_prefix(tmp_path, "secret/*"),
-    )
+    ).search_directory
     result = search_directory("secret")
 
     assert "[public.txt line1] secret word" in result
@@ -268,7 +268,7 @@ def test_search_directory_respects_validator(tmp_path: Path, monkeypatch) -> Non
 def test_search_directory_invalid_regex(tmp_path: Path, monkeypatch) -> None:
     """search_directory 在正则无效时应抛出异常。"""
     monkeypatch.chdir(tmp_path)
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_directory
 
     with pytest.raises(ValueError, match="无效的正则表达式"):
         search_directory("(")
@@ -280,7 +280,7 @@ def test_search_file_matches_line_content(tmp_path: Path, monkeypatch) -> None:
     sample_file = tmp_path / "data.log"
     sample_file.write_text("error: timeout\ninfo: ok\nerror: retry\n", encoding="utf-8")
 
-    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+    search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_file
     result = search_file("error", path="data.log")
 
     assert result == "[line1] error: timeout\n[line3] error: retry"
@@ -292,7 +292,7 @@ def test_search_file_no_match(tmp_path: Path, monkeypatch) -> None:
     sample_file = tmp_path / "notes.txt"
     sample_file.write_text("hello world\n", encoding="utf-8")
 
-    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+    search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_file
     result = search_file("NOTFOUND", path="notes.txt")
 
     assert result == "(无匹配)"
@@ -306,9 +306,9 @@ def test_search_file_respects_readable_permission(tmp_path: Path, monkeypatch) -
     secret_file = secret_dir / "private.txt"
     secret_file.write_text("classified data\n", encoding="utf-8")
 
-    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(
+    search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(
         _reject_path_prefix(tmp_path, "secret/*"),
-    )
+    ).search_file
     with pytest.raises(PermissionError, match="没有权限"):
         search_file("classified", path="secret/private.txt")
 
@@ -321,9 +321,9 @@ def test_search_file_allows_readable_but_not_discoverable(tmp_path: Path, monkey
     secret_file = secret_dir / "private.txt"
     secret_file.write_text("classified data\n", encoding="utf-8")
 
-    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(
+    search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(
         _reject_discoverable_only(tmp_path, "secret/*"),
-    )
+    ).search_file
     result = search_file("classified", path="secret/private.txt")
 
     assert result == "[line1] classified data"
@@ -336,9 +336,9 @@ def test_search_directory_skips_not_discoverable(tmp_path: Path, monkeypatch) ->
     secret_dir.mkdir()
     (secret_dir / "private.txt").write_text("classified data\n", encoding="utf-8")
 
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(
         _reject_discoverable_only(tmp_path, "secret/*"),
-    )
+    ).search_directory
     result = search_directory("classified")
 
     assert result == "(无匹配)"
@@ -351,7 +351,7 @@ def test_search_directory_filter_glob(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "b.txt").write_text("import os\n", encoding="utf-8")
     (tmp_path / "c.py").write_text("print('hi')\n", encoding="utf-8")
 
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_directory
     result = search_directory("import", file_filter="*.py")
 
     assert "[a.py line1] import os" in result
@@ -372,7 +372,7 @@ def test_search_file_returns_full_matches_without_early_truncation(
         "\n".join([match_line, match_line, "tail match"]),
         encoding="utf-8",
     )
-    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+    search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_file
 
     result = search_file("x+|tail match", path="many.txt")
 
@@ -392,7 +392,7 @@ def test_search_directory_returns_full_matches_without_early_truncation(
     (tmp_path / "first.txt").write_text(match_line + "\n", encoding="utf-8")
     (tmp_path / "second.txt").write_text("y\n", encoding="utf-8")
 
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(_under_root(tmp_path))
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_directory
     result = search_directory("y")
 
     assert "搜索结果已提前截断" not in result
@@ -404,7 +404,7 @@ def test_search_file_reports_timeout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data.txt").write_text("match\nmatch\n", encoding="utf-8")
     monkeypatch.setattr(egent.limits, "SEARCH_FILE_TIMEOUT_SECONDS", 0)
-    search_file = egent.builtin_tools.file_system_tools.get_search_file_tool(_under_root(tmp_path))
+    search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_file
 
     result = search_file("match", path="data.txt")
 
@@ -417,9 +417,9 @@ def test_search_directory_reports_timeout(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "a.txt").write_text("match\n", encoding="utf-8")
     (tmp_path / "b.txt").write_text("match\n", encoding="utf-8")
     monkeypatch.setattr(egent.limits, "SEARCH_DIRECTORY_TIMEOUT_SECONDS", 0)
-    search_directory = egent.builtin_tools.file_system_tools.get_search_directory_tool(
+    search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(
         _under_root(tmp_path),
-    )
+    ).search_directory
 
     result = search_directory("match")
 

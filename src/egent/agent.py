@@ -136,7 +136,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         skill_index, skill_catalog = self.__build_skills(skills)
         self.__builtin_tools = [
             *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
-            *egent.builtin_tools.file_system_tools.get_file_tools(path_permissions),
+            *egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools,
         ]
         if skill_index:
             self.__add_message("system", skill_catalog)

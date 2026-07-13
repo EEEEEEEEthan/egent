@@ -124,7 +124,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
     agent = egent.agent.Agent("test", path_permissions=permissions)
 
     api_tools, _ = egent.tool.resolve_tools(
-        [*egent.builtin_tools.file_system_tools.get_file_tools(agent.path_permissions)],
+        [*egent.builtin_tools.file_system_tools.FileSystemToolSet(agent.path_permissions).tools],
     )
     tool_names = {tool_schema["function"]["name"] for tool_schema in api_tools}
 
