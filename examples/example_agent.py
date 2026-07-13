@@ -31,6 +31,7 @@ async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     ethan = egent.agent.Agent(
         "gpt5",
+        system_prompt="你是简洁、务实的编程助手。",
         skills=[_EXAMPLE_GREET_SKILL],
         tools=[_common.reload_modules],
         path_permissions=egent.builtin_tools.path_validator.PathPermissions(

@@ -108,6 +108,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self,
         settings: str,
         *,
+        system_prompt: str = "",
         skills: Iterable[str | pathlib.Path] = (),
         tools: Iterable[egent.tool.ToolCallable] = (),
         path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
@@ -116,6 +117,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
         Args:
             settings: ``.egent/.model.toml`` 中的 profile 名（相对运行目录 ``cwd``）。
+            system_prompt: 系统提示词正文；会与技能目录等拼成一条开头 system 消息。
             skills: 技能路径列表，每项为技能目录或 ``SKILL.md`` 路径。
             tools: 自定义工具列表，构造后固定不变。
             path_permissions: 文件工具路径权限，构造后固定不变；``None`` 表示不限制。
@@ -137,8 +139,13 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 *tools,
             ],
         )
-        if skill_index:
-            self.__add_message("system", skill_catalog)
+        system_sections = [
+            section.strip()
+            for section in (system_prompt, skill_catalog if skill_index else "")
+            if section.strip()
+        ]
+        if system_sections:
+            self.__add_message("system", "\n\n".join(system_sections))
 
     def __copy__(self) -> Agent:
         cloned = Agent.__new__(Agent)

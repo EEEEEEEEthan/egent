@@ -98,6 +98,36 @@ async def test_run_with_network_retry_does_not_retry_client_errors() -> None:
     assert attempt_count == 1
 
 
+def test_agent_composes_system_prompt_with_skill_catalog(monkeypatch, tmp_path) -> None:
+    """构造参数 system_prompt 应与技能目录拼成开头一条 system 消息。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+    skill_dir = tmp_path / "demo-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: demo\ndescription: 示例技能\n---\n\n# Demo\n",
+        encoding="utf-8",
+    )
+
+    agent = egent.agent.Agent(
+        "test",
+        system_prompt="你是代码助手。",
+        skills=[skill_dir],
+    )
+    messages = agent._Agent__messages
+
+    assert len(messages) == 1
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"].startswith("你是代码助手。\n\n可用技能")
+    assert "- demo: 示例技能" in messages[0]["content"]
+
+
 def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
     """Agent 应内置文件工具，无需手动加入 tools。"""
     monkeypatch.setattr(
