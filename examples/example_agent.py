@@ -51,11 +51,17 @@ async def async_main() -> int:
     agents: dict[str, egent.agent.Agent] = {}
     def get_speak_tool(from_name: str):
         async def speak_tool(to_name: str, prompt: str) -> str:
+            """对指定角色说话，并得到回复
+            @param to_name: 说话对象
+            @param prompt: 说话内容
+            @return: 回复内容
+            """
             result = ""
             for agent in agents.values():
                 if agent.name == to_name:
                     agent.add_message("system", f"{from_name}对你说:\n{prompt}")
-                    result = await agent.send()
+                    await agent.send()
+                    result = agent.last_message
                 elif agent.name != from_name:
                     agent.add_message("system", f"{from_name}对{agent.name}说:\n{prompt}")
             for agent in agents.values():
@@ -96,11 +102,11 @@ async def async_main() -> int:
     )
     milo.name = "milo"
     agents[milo.name] = milo
-    printer = conversation_printer.ConversationPrinter(ethan)
+    conversation_printer.ConversationPrinter(ethan)
+    conversation_printer.ConversationPrinter(milo)
     while True:
         ethan.add_message("user", input(">>> ").strip())
-        await printer.send()
-
+        await ethan.send()
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(async_main()))
