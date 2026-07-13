@@ -203,6 +203,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     async def send(self) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
+        if self.busy:
+            raise RuntimeError("Agent is busy")
         self.busy = True
         while True:
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
@@ -296,6 +298,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加消息原文，不截断。供框架写入 agent 回复等。"""
+        if self.busy:
+            raise RuntimeError("Agent is busy")
         message: ChatMessage = {"role": role, "content": content, **extra}
         self.__messages.append(message)
         extra_text = f" | extra={extra}" if extra else ""
