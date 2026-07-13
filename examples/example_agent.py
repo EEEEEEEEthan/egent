@@ -20,14 +20,6 @@ import egent.builtin_tools.path_validator
 
 _EXAMPLE_GREET_SKILL = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "example-greet"
 
-async def run_turn(
-    agent: egent.agent.Agent,
-    printer: conversation_printer.ConversationPrinter,
-) -> None:
-    """运行一轮交互：收集用户输入并发送请求。"""
-    agent.add_message("user", input(">>> ").strip())
-    await printer.send()
-
 _WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
 _DISCOVERABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=("*",),
@@ -56,7 +48,7 @@ _NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
 
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
-    agents:dict[str, egent.egent.Agent] = {}
+    agents: dict[str, egent.agent.Agent] = {}
     ethan = egent.agent.Agent(
         settings="gpt5",
         system_prompt=
@@ -72,9 +64,25 @@ async def async_main() -> int:
     )
     ethan.name = "ethan"
     agents[ethan.name] = ethan
+    milo = egent.agent.Agent(
+        settings="gpt5",
+        system_prompt=
+            "你是milo，你是ethan的小弟，按ethan的安排做事\n"
+        ,
+        skills=(),
+        tools=(),
+        path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=_DISCOVERABLE_RULE,
+            readable=_READABLE_RULE,
+            editable=_NO_EDITABLE_RULE,
+        ),
+    )
+    milo.name = "milo"
+    agents[milo.name] = milo
     printer = conversation_printer.ConversationPrinter(ethan)
     while True:
-        await run_turn(ethan, printer)
+        ethan.add_message("user", input(">>> ").strip())
+        await printer.send()
 
 
 if __name__ == "__main__":
