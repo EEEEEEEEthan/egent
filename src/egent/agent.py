@@ -194,9 +194,9 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             )
         return self.__add_message(role, content, **extra)
 
-    async def request(self) -> None:
+    async def send(self) -> None:
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
-        await self.__request()
+        await self.__send()
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""
@@ -327,7 +327,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         assert last_error is not None
         raise last_error
 
-    async def __request(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    async def __send(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         self,
     ) -> None:
         api_tools, tool_handlers = egent.tool.resolve_tools(

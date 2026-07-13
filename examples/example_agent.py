@@ -12,7 +12,6 @@ from pathlib import Path
 
 import _common
 import conversation_printer
-from egent import builtin_tools
 from egent.agent import Agent
 
 _EXAMPLE_GREET_SKILL = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "example-greet"
@@ -24,7 +23,7 @@ async def run_turn(
 ) -> None:
     """运行一轮交互：收集用户输入并发送请求。"""
     agent.add_message("user", input(">>> ").strip())
-    await printer.request()
+    await printer.send()
 
 
 async def async_main() -> int:
@@ -32,12 +31,7 @@ async def async_main() -> int:
     agent = Agent(
         "gpt5",
         skills=[_EXAMPLE_GREET_SKILL],
-        tools=[
-            *builtin_tools.git_tools.read_only_tools,
-            builtin_tools.git_tools.git_add,
-            builtin_tools.git_tools.git_commit,
-            _common.reload_modules,
-        ],
+        tools=[_common.reload_modules],
         path_permissions=_common.create_egent_path_permissions(),
     )
     printer = conversation_printer.ConversationPrinter(agent)

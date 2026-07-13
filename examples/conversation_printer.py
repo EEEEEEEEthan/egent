@@ -30,9 +30,9 @@ class ConversationPrinter:
     ) -> None:
         self.close()
 
-    async def request(self) -> None:
+    async def send(self) -> None:
         """执行一轮请求并打印流式输出。"""
-        await self._agent.request()
+        await self._agent.send()
 
     def __handle_event(self, event: egent.agent.AgentEvent) -> None:
         if isinstance(event, egent.agent.TextDelta):
