@@ -74,16 +74,16 @@ async def async_main() -> int:
             _print_speech(f"{from_name}->{target_label}", prompt)
             for agent in agents.values():
                 if agent.name in targets:
-                    agent.add_message("system", f"{from_name}对你说:\n{prompt}")
+                    agent.add_message("user", f"{from_name}对你说:\n{prompt}")
                 elif agent.name != from_name:
-                    agent.add_message("system", f"{from_name}对{target_label}说:\n{prompt}")
+                    agent.add_message("user", f"{from_name}对{target_label}说:\n{prompt}")
 
             def on_target_replied(name: str, result: str) -> None:
                 _print_speech(f"{name}->{from_name}", result)
-                from_agent.add_message("system", f"{name}回复:\n{result}")
+                from_agent.add_message("user", f"{name}回复:\n{result}")
                 for agent in agents.values():
                     if agent.name not in targets and agent.name != from_name:
-                        agent.add_message("system", f"{name}回复{from_name}:\n{result}")
+                        agent.add_message("user", f"{name}回复{from_name}:\n{result}")
 
             async def dispatch_speak_round() -> None:
                 async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
@@ -150,8 +150,11 @@ async def async_main() -> int:
             await asyncio.gather(*tuple(pending_speak_tasks))
 
     while True:
-        ethan.add_message("user", input(">>> ").strip())
-        _print_speech("ethan", await ethan.send())
+        user_input = input(">>> ").strip()
+        ethan.add_message("user", f"用户:\n{user_input}")
+        ethan_reply = await ethan.send()
+        if ethan_reply:
+            _print_speech("ethan", ethan_reply)
         await await_all_agents_idle()
 
 if __name__ == "__main__":
