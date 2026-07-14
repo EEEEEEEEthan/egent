@@ -50,25 +50,31 @@ async def async_main() -> int:
     agents: dict[str, egent.agent.Agent] = {}
     def get_speak_tool(from_name: str):
         @egent.tool.end_conversation
-        async def speak_tool(to_name: str, prompt: str) -> str:
+        async def speak_tool(to_names: list[str], prompt: str) -> str:
             """对指定角色说话，并得到回复
-            @param to_name: 说话对象
+            @param to_names: 说话对象（可多个）
             @param prompt: 说话内容
             @return: 回复内容
             """
-            print(f"{from_name}->{to_name}:\n{prompt}")
-            result = ""
+            targets = set(to_names)
+            target_label = ", ".join(to_names)
+            print(f"{from_name}->{target_label}:\n{prompt}")
             for agent in agents.values():
-                if agent.name == to_name:
+                if agent.name in targets:
                     agent.add_message("system", f"{from_name}对你说:\n{prompt}")
-                    result = await agent.send()
                 elif agent.name != from_name:
-                    agent.add_message("system", f"{from_name}对{agent.name}说:\n{prompt}")
-            print(f"{to_name}->{from_name}:\n{result}")
+                    agent.add_message("system", f"{from_name}对{target_label}说:\n{prompt}")
+            results: dict[str, str] = {}
             for agent in agents.values():
-                if agent.name != to_name and agent.name != from_name:
-                    agent.add_message("system", f"{to_name}回复{from_name}:\n{result}")
-            return result
+                if agent.name in targets:
+                    results[agent.name] = await agent.send()
+            for name, result in results.items():
+                print(f"{name}->{from_name}:\n{result}")
+            for agent in agents.values():
+                if agent.name not in targets and agent.name != from_name:
+                    for name, result in results.items():
+                        agent.add_message("system", f"{name}回复{from_name}:\n{result}")
+            return "\n\n".join(f"{name}: {result}" for name, result in results.items())
         return speak_tool
     # ethan
     ethan = egent.agent.Agent(
@@ -76,7 +82,7 @@ async def async_main() -> int:
         settings="gpt5",
         system_prompt=
             "你是ethan，你是这个项目的主程\n"
-            "milo是你的助理，如果需要看代码，尽量和milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这回耽误你太多时间"
+            "milo是你的助理，如果需要看代码，尽量和milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间"
         ,
         skills=(),
         tools=(get_speak_tool("ethan"),),
