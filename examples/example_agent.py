@@ -89,6 +89,7 @@ async def async_main() -> int:
                     break
             else:
                 result = f'"{title}"开发工作因为无法预测的错误而失败了'
+            print(result)
             await leader.await_free
             await leader.add_message("user", result)
             await leader.send()
