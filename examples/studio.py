@@ -154,14 +154,13 @@ class Studio:  # pylint: disable=too-few-public-methods
         def coding_switcher(
             result: str,
         ) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
-            if result.startswith("<<<完成>>>") or result.startswith("<<<放弃>>>"):
+            if result.strip().startswith("<<<完成>>>") or result.strip().startswith("<<<放弃>>>"):
                 return None, result
             return None, None
         node_coding = work_order.WorkOrderNode(
             agent=self.__agents["Leo"],
             submit_notification=(
-                "工作完毕后回复三个尖括号包裹的`完成`或者`放弃`,"
-                "并说明理由,例如`<<<放弃>>>我没有权限编辑`"
+                "工作完毕后回复:先用三个尖括号包裹的`完成`或者`放弃`,然后说明理由,例如`<<<放弃>>>我没有权限编辑`"
             ),
             switcher=coding_switcher,
         )
