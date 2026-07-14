@@ -176,6 +176,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         """移除流式事件监听器。"""
         self.__event_listeners.remove(listener)
 
+    @property
+    def busy(self) -> bool:
+        """是否正在 send。"""
+        return self.__is_sending
+
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
         if self.__is_sending:
