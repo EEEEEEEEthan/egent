@@ -71,7 +71,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             lines = [
                 "你们在这个团队进行开发",
                 role_line("Ethan", "是这个项目的主程"),
-                role_line("Milo", "是Ethan的助理,负责协助收集项目资料以及分析需求"),
+                role_line("Milo", "是这个项目的副主程,负责协助收集项目资料以及分析需求"),
                 role_line("Leo", "是开发工程师负责写代码"),
             ]
             return "\n".join(lines) + "\n"
