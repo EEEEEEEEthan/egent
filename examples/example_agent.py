@@ -107,8 +107,7 @@ async def async_main() -> int:
     conversation_printer.ConversationPrinter(milo, 1)
     while True:
         ethan.add_message("user", input(">>> ").strip())
-        await ethan.send()
-        print(f"ethan: \n{ethan.last_message}")
+        print(f"ethan: \n{await ethan.send()}")
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(async_main()))
