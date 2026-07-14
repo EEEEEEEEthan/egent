@@ -141,6 +141,31 @@ def test_outside_whitelist_has_no_permissions(tmp_path: Path) -> None:
     assert not permissions.is_searchable(outside_file)
 
 
+def test_readonly_copy_preserves_read_permissions_and_denies_edit(tmp_path: Path) -> None:
+    """readonly_copy 应保留可发现与可读，并禁用全部可编辑。"""
+    scope_directory = tmp_path / "scope"
+    scope_directory.mkdir()
+    sample_file = scope_directory / "sample.txt"
+    sample_file.write_text("content", encoding="utf-8")
+    scope_posix = scope_directory.resolve().as_posix()
+    permissions = _permissions(
+        scope_directory,
+        discoverable_whitelist=(f"{scope_posix}/*",),
+        readable_whitelist=(f"{scope_posix}/*",),
+        editable_whitelist=(f"{scope_posix}/*",),
+    )
+
+    readonly_permissions = permissions.readonly_copy
+
+    assert readonly_permissions is not permissions
+    assert readonly_permissions.discoverable is permissions.discoverable
+    assert readonly_permissions.readable is permissions.readable
+    assert readonly_permissions.is_discoverable(sample_file)
+    assert readonly_permissions.is_readable(sample_file)
+    assert readonly_permissions.is_searchable(sample_file)
+    assert not readonly_permissions.is_editable(sample_file)
+
+
 def test_global_whitelist_matches_any_path(tmp_path: Path) -> None:
     """* 白名单（fnmatch 全路径匹配）应匹配任意绝对路径。"""
     sample_file = tmp_path / "sample.txt"

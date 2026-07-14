@@ -72,6 +72,9 @@ class PathPermissionRule:
         return True
 
 
+_NO_EDIT_RULE = PathPermissionRule(whitelist=(), blacklist=("*",))
+
+
 @dataclass(frozen=True)
 class PathPermissions:
     """路径权限配置：可发现、可读、可编辑各一组白名单与黑名单。"""
@@ -79,6 +82,15 @@ class PathPermissions:
     discoverable: PathPermissionRule = PathPermissionRule()
     readable: PathPermissionRule = PathPermissionRule()
     editable: PathPermissionRule = PathPermissionRule()
+
+    @property
+    def readonly_copy(self) -> PathPermissions:
+        """保留可发现与可读规则，禁用全部可编辑权限。"""
+        return PathPermissions(
+            discoverable=self.discoverable,
+            readable=self.readable,
+            editable=_NO_EDIT_RULE,
+        )
 
     def is_discoverable(self, path: Path) -> bool:
         """路径是否允许被遍历发现。"""
