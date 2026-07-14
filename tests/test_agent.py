@@ -341,3 +341,36 @@ async def test_send_runs_all_tool_calls_before_conversation_terminating_tool(mon
     assert turn_completed_texts == ["使用了finish_task"]
     tool_messages = [message for message in agent._Agent__messages if message["role"] == "tool"]
     assert [message["content"] for message in tool_messages] == ["first", "done", "last"]
+
+
+@pytest.mark.asyncio
+async def test_send_blocks_concurrent_send_and_add_message(monkeypatch) -> None:
+    """send 进行中时，外部不能重复 send 或 add_message。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+
+    agent = egent.agent.Agent(settings="test")
+    send_entered = False
+
+    async def fake_fetch_chat_completion() -> SimpleNamespace:
+        nonlocal send_entered
+        send_entered = True
+        with pytest.raises(RuntimeError, match="不能 add_message"):
+            agent.add_message("user", "blocked")
+        with pytest.raises(RuntimeError, match="不能重复 send"):
+            await agent.send()
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok", tool_calls=[]))],
+        )
+
+    monkeypatch.setattr(agent, "_Agent__fetch_chat_completion", fake_fetch_chat_completion)
+
+    assert await agent.send() == "ok"
+    assert send_entered
+    agent.add_message("user", "after send")

@@ -178,34 +178,21 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
-        # 以 TOOL_RESULT_MAX_CHARS 作为截断阈值，超出部分保存到 .egent/.temp/ 临时文件。
-        # 原因：工具返回值是一次性的，无其他持久化来源，不保存则 AI 永远无法看到完整内容。
-        if len(content) > egent.limits.TOOL_RESULT_MAX_CHARS:
-            head = content[:egent.limits.TOOL_RESULT_MAX_CHARS]
-            tail = content[egent.limits.TOOL_RESULT_MAX_CHARS:]
-            egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
-            egent_temp_dir.mkdir(parents=True, exist_ok=True)
-            egent.model_settings.ensure_egent_gitignore()
-            file_name = f"{role}-{uuid.uuid4().hex}.txt"
-            (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
-            egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
-            relative_path = f".egent/.temp/{file_name}"
-            file_lines = content.splitlines(keepends=True) or ([content] if content else [])
-            next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
-                file_lines,
-                1,
-                1,
-                egent.limits.TOOL_RESULT_MAX_CHARS,
-            )
-            content = (
-                f"{head}...\n"
-                f"(内容太长被截断,剩余{len(tail)}字符,完整内容保存于{relative_path},"
-                f"请用 line={next_line} column={next_column} 继续读取)"
-            )
-        return self.__add_message(role, content, **extra)
+        if self.__is_sending:
+            raise RuntimeError("Agent 正在 send，不能 add_message")
+        return self.__add_message(role, self.__truncate_message_content(role, content), **extra)
 
     async def send(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
+        if self.__is_sending:
+            raise RuntimeError("Agent 正在 send，不能重复 send")
+        self.__is_sending = True
+        try:
+            return await self.__send_loop()
+        finally:
+            self.__is_sending = False
+
+    async def __send_loop(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         while True:
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
             message = completion.choices[0].message
@@ -241,7 +228,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 except Exception as exception:  # pylint: disable=broad-exception-caught
                     handler_result = str(exception)
                     is_exception = True
-                tool_message = self.add_message("tool", handler_result, tool_call_id=tool_call.id)
+                tool_message = self.__add_message(
+                    "tool",
+                    self.__truncate_message_content("tool", handler_result),
+                    tool_call_id=tool_call.id,
+                )
                 self.__emit_event(ToolCallExecuted(
                     name=function_name,
                     arguments=function_arguments,
@@ -300,6 +291,33 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     def __emit_event(self, event: AgentEvent) -> None:
         for listener in self.__event_listeners:
             listener(event)
+
+    def __truncate_message_content(self, role: ChatRole, content: str) -> str:
+        # 以 TOOL_RESULT_MAX_CHARS 作为截断阈值，超出部分保存到 .egent/.temp/ 临时文件。
+        # 原因：工具返回值是一次性的，无其他持久化来源，不保存则 AI 永远无法看到完整内容。
+        if len(content) <= egent.limits.TOOL_RESULT_MAX_CHARS:
+            return content
+        head = content[:egent.limits.TOOL_RESULT_MAX_CHARS]
+        tail = content[egent.limits.TOOL_RESULT_MAX_CHARS:]
+        egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
+        egent_temp_dir.mkdir(parents=True, exist_ok=True)
+        egent.model_settings.ensure_egent_gitignore()
+        file_name = f"{role}-{uuid.uuid4().hex}.txt"
+        (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
+        egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
+        relative_path = f".egent/.temp/{file_name}"
+        file_lines = content.splitlines(keepends=True) or ([content] if content else [])
+        next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
+            file_lines,
+            1,
+            1,
+            egent.limits.TOOL_RESULT_MAX_CHARS,
+        )
+        return (
+            f"{head}...\n"
+            f"(内容太长被截断,剩余{len(tail)}字符,完整内容保存于{relative_path},"
+            f"请用 line={next_line} column={next_column} 继续读取)"
+        )
 
     def __add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加消息原文，不截断。供框架写入 agent 回复等。"""
