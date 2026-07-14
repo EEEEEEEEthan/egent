@@ -129,9 +129,9 @@ class Studio:  # pylint: disable=too-few-public-methods
             await asyncio.gather(*self.__pending_speak_tasks)
         return ethan_reply
 
-    async def begin_develop_workflow(self, message: str) -> str:
+    async def begin_develop_workflow(self, prompt: str) -> str:
         """开始开发工作流.
-        @param message: 用户消息
+        @param prompt: 开发需求.请务必精准,措辞简练
         @return: 开发工作流结果
         """
         def coding_switcher(
@@ -140,7 +140,6 @@ class Studio:  # pylint: disable=too-few-public-methods
             if result.startswith("<<<完成>>>") or result.startswith("<<<放弃>>>"):
                 return None, result
             return None, None
-
         node_coding = work_order.WorkOrderNode(
             agent=self.__agents["Ethan"],
             submit_notification=(
@@ -149,7 +148,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             ),
             switcher=coding_switcher,
         )
-        return await node_coding.begin(message, "")
+        return await node_coding.begin(prompt, "")
 
     @staticmethod
     def __print_speech(speaker: str, body: str) -> None:
