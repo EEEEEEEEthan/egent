@@ -68,6 +68,7 @@ async def async_main() -> int:
             """
             if from_name in to_names:
                 raise ValueError(f"不能对自己说话：{from_name}")
+            from_agent = agents.get(from_name)
             targets = set[str](to_names)
             target_label = ", ".join(to_names)
             _print_speech(f"{from_name}->{target_label}", prompt)
@@ -79,9 +80,7 @@ async def async_main() -> int:
 
             def on_target_replied(name: str, result: str) -> None:
                 _print_speech(f"{name}->{from_name}", result)
-                from_agent = agents.get(from_name)
-                if from_agent is not None:
-                    from_agent.add_message("system", f"{name}回复:\n{result}")
+                from_agent.add_message("system", f"{name}回复:\n{result}")
                 for agent in agents.values():
                     if agent.name not in targets and agent.name != from_name:
                         agent.add_message("system", f"{name}回复{from_name}:\n{result}")
@@ -101,9 +100,7 @@ async def async_main() -> int:
                 await asyncio.gather(
                     *(dispatch_target_reply(agent) for agent in target_agents)
                 )
-                from_agent = agents.get(from_name)
-                if from_agent is not None:
-                    _print_speech(from_name, await from_agent.send())
+                _print_speech(from_name, await from_agent.send())
 
             if any(agent.name in targets for agent in agents.values()):
                 task = asyncio.create_task(dispatch_speak_round())
@@ -145,8 +142,8 @@ async def async_main() -> int:
         ),
     )
     agents[milo.name] = milo
-    conversation_printer.ConversationPrinter(ethan)
-    conversation_printer.ConversationPrinter(milo, 1)
+    #conversation_printer.ConversationPrinter(ethan)
+    #conversation_printer.ConversationPrinter(milo, 1)
 
     async def await_all_agents_idle() -> None:
         while pending_speak_tasks:
