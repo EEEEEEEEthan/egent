@@ -30,6 +30,7 @@ async def test_leaf_node_returns_history_on_valid_submission() -> None:
     """叶节点验收通过后应返回累积历史。"""
     agent = _StubAgent(["完成报告\nDONE"], name="review")
     node = work_order.WorkOrderNode(
+        name="审查",
         agent=agent,  # type: ignore[arg-type]
         submit_notification="请按格式提交",
         switcher=lambda result: (None, result.removeprefix("完成报告\n") or None),
@@ -57,6 +58,7 @@ async def test_leaf_node_retries_on_validation_failure() -> None:
         return None
 
     node = work_order.WorkOrderNode(
+        name="leaf",
         agent=agent,  # type: ignore[arg-type]
         submit_notification="提交",
         switcher=lambda result: (
@@ -80,12 +82,14 @@ async def test_internal_node_hands_off_to_next_node() -> None:
     """中间节点应把累积历史交给下一节点。"""
     leaf_agent = _StubAgent(["完成\nleaf-body"], name="leaf")
     leaf = work_order.WorkOrderNode(
+        name="leaf",
         agent=leaf_agent,  # type: ignore[arg-type]
         submit_notification="leaf-submit",
         switcher=lambda result: (None, result.removeprefix("完成\n") or None),
     )
     root_agent = _StubAgent(["移交\nhandoff-body"], name="root")
     root = work_order.WorkOrderNode(
+        name="root",
         agent=root_agent,  # type: ignore[arg-type]
         submit_notification="root-submit",
         switcher=lambda result: (
@@ -113,6 +117,7 @@ async def test_node_retries_when_switcher_returns_no_message() -> None:
         return None, None
 
     node = work_order.WorkOrderNode(
+        name="retry",
         agent=agent,  # type: ignore[arg-type]
         submit_notification="fmt",
         switcher=switcher,

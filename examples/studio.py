@@ -181,6 +181,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             return f"回归测试不通过 (exit code {proc.returncode}):\n{output}"
 
         node_coding = work_order.WorkOrderNode(
+            name="开发",
             agent=self.__agents["Leo"],
             submit_notification=(
                 "工作完毕后回复:先用三个尖括号包裹的`完成`或者`放弃`,然后说明理由,例如`<<<放弃>>>我没有权限编辑`"

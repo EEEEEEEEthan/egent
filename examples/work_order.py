@@ -18,6 +18,7 @@ _COLOR_RESET = "\033[0m"
 class WorkOrderNode:
     """工单图中的一个节点，构造时与 Agent、路由与验收逻辑绑定。"""
 
+    name: str
     agent: egent.agent.Agent
     submit_notification: str
     switcher: Callable[[str], tuple[WorkOrderNode | None, HandoffMessage]]
@@ -25,7 +26,8 @@ class WorkOrderNode:
 
     async def begin(self, prompt: str, history: str = "") -> str:
         """注入本节点提示词并驱动 Agent 运转，直至完成或移交下一节点。"""
-        print(f"{_COLOR_BLUE}开始工作节点: {self.agent.name}{_COLOR_RESET}")
+        print(f"{_COLOR_BLUE}{self.name} begin{_COLOR_RESET}")
+        completion_result: str | None = None
         try:
             await self.agent.await_free()
             await self.agent.summarize()
@@ -40,7 +42,7 @@ class WorkOrderNode:
                 rejection_reason = self.validator(result)
                 if rejection_reason:
                     print(
-                        f"{_COLOR_RED}工作节点自动测试打回: {self.agent.name}{_COLOR_RESET}\n"
+                        f"{_COLOR_RED}{self.name} auto rejected: {_COLOR_RESET}\n"
                         f"{rejection_reason}"
                     )
                     self.agent.add_message(
@@ -48,12 +50,15 @@ class WorkOrderNode:
                         f"被自动验收打回,原因:\n{rejection_reason}",
                     )
                     continue
+                completion_result = result
                 extended_history = self.__extend_history(history, handoff_message)
                 if next_node is None:
                     return extended_history
                 return await next_node.begin("", extended_history)
         finally:
-            print(f"{_COLOR_BLUE}结束工作节点: {self.agent.name}{_COLOR_RESET}")
+            print(f"{_COLOR_BLUE}{self.name} end{_COLOR_RESET}")
+            if completion_result is not None:
+                print(completion_result)
 
     def __extend_history(self, history: str, message: str) -> str:
         segment = f"{self.agent.name}\n{message}"
