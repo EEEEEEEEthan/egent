@@ -61,6 +61,9 @@ class Studio:  # pylint: disable=too-few-public-methods
     def __init__(self) -> None:
         self.__agents: dict[str, egent.agent.Agent] = {}
         self.__pending_speak_tasks: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
+        general_system_prompt = (
+            "你不必复述群聊内容"
+        )
         self.__agents["Ethan"] = egent.agent.Agent(
             name="Ethan",
             settings="gpt5",
@@ -68,8 +71,8 @@ class Studio:  # pylint: disable=too-few-public-methods
                 "你是Ethan,你是这个项目的主程\n"
                 "Milo是你的助理,Leo是开发工程师负责写代码\n"
                 "如果需要看代码,尽量和Milo说让他先看,帮你筛选出关键代码,然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
-                "如果需要改代码,让Leo去做\n"
-                "这是群聊,所以你不必把别人的话复述给用户\n"
+                f"如果需要改代码,用{self.__begin_develop_workflow.__name__}去做\n"
+                f"{general_system_prompt}\n"
                 "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多\n"
             ,
             skills=(),
@@ -87,6 +90,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             settings="gpt5",
             system_prompt=
                 "你是Milo,是Ethan的助理。Ethan是这个项目的主程\n"
+                f"{general_system_prompt}\n"
             ,
             skills=(),
             tools=(self.__get_speak_tool("Milo"),),
@@ -105,7 +109,7 @@ class Studio:  # pylint: disable=too-few-public-methods
                 "你是Leo,开发工程师,负责编写和修改代码\n"
                 "Ethan是主程,Milo负责帮Ethan读代码\n"
                 "收到写代码任务后,先了解上下文再动手,改完简要说明改了什么\n"
-                "这是群聊,所以你不必把别人的话复述给用户\n"
+                f"{general_system_prompt}\n"
                 "用户是资深程序员,沟通时不需要解释太多\n"
             ,
             skills=(),
@@ -172,13 +176,13 @@ class Studio:  # pylint: disable=too-few-public-methods
             target_label = ", ".join(to_names)
             Studio.__print_speech(f"{from_name}->{target_label}", prompt)
             target_prompts = {
-                agent.name: f"{from_name}对你说:\n{prompt}"
+                agent.name: f"[群聊]{from_name}对你说:\n{prompt}"
                 for agent in self.__agents.values()
                 if agent.name in targets
             }
             for agent in self.__agents.values():
                 if agent.name not in targets and agent.name != from_name:
-                    agent.add_message("user", f"{from_name}对{target_label}说:\n{prompt}")
+                    agent.add_message("user", f"[群聊]{from_name}对{target_label}说:\n{prompt}")
             async def dispatch_speak_round() -> None:
                 async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
                     permissions = target_agent.path_permissions
@@ -192,12 +196,12 @@ class Studio:  # pylint: disable=too-few-public-methods
                     finally:
                         target_agent.path_permissions = permissions
                     Studio.__print_speech(f"{target_agent.name}->{from_name}", result)
-                    from_agent.add_message("user", f"{target_agent.name}回复:\n{result}")
+                    from_agent.add_message("user", f"[群聊]{target_agent.name}回复:\n{result}")
                     for agent in self.__agents.values():
                         if agent.name not in targets and agent.name != from_name:
                             agent.add_message(
                                 "user",
-                                f"{target_agent.name}回复{from_name}:\n{result}",
+                                f"[群聊]{target_agent.name}回复{from_name}:\n{result}",
                             )
                 target_agents = [
                     agent for agent in self.__agents.values()
