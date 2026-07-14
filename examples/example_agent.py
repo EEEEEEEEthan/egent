@@ -133,11 +133,17 @@ async def async_main() -> int:
         ),
     )
     agents[milo.name] = milo
-    #conversation_printer.ConversationPrinter(ethan)
-    #conversation_printer.ConversationPrinter(milo, 1)
+    conversation_printer.ConversationPrinter(ethan)
+    conversation_printer.ConversationPrinter(milo, 1)
+
+    async def await_all_agents_idle() -> None:
+        while pending_speak_tasks:
+            await asyncio.gather(*tuple(pending_speak_tasks))
+
     while True:
         ethan.add_message("user", input(">>> ").strip())
         _print_speech("ethan", await ethan.send())
+        await await_all_agents_idle()
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(async_main()))
