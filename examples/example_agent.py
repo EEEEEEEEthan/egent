@@ -49,8 +49,7 @@ _EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     leader: egent.agent.Agent
-    @egent.tool.end_conversation
-    def _delegate_development_work(title: str, description: str) -> str:
+    async def _delegate_development_work(title: str, description: str) -> str:
         """委派开发工作
         @title: 开发工作标题,几个单词即可
         @description: 开发工作描述,务必精准且简练
@@ -73,29 +72,23 @@ async def async_main() -> int:
             "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
             "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
         )
-        async def send() -> None:
-            result = ""
-            for _ in range(5):
-                developer.add_message("user", reminder)
-                result = (await developer.send()).strip()
-                if result.startswith("<<<完成>>>"):
-                    result = f'"{title}"开发工作完成,简报如下:\n{result[len("<<<完成>>>"):].strip()}\n\n'
-                    break
-                if result.startswith("<<<打回>>>"):
-                    result = (
-                        f'"{title}"开发工作被打回,理由如下:\n{result[len("<<<打回>>>"):].strip()}\n\n'
-                        "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
-                    )
-                    break
-            else:
-                result = f'"{title}"开发工作因为无法预测的错误而失败了'
-            print(result)
-            await leader.await_free()
-            leader.add_message("user", result)
-            await leader.send()
-
-        asyncio.create_task(send())
-        return f'"{title}"开始开发，请耐心等待'
+        result = ""
+        for _ in range(5):
+            developer.add_message("user", reminder)
+            result = (await developer.send()).strip()
+            if result.startswith("<<<完成>>>"):
+                result = f'"{title}"开发工作完成,简报如下:\n{result[len("<<<完成>>>"):].strip()}\n\n'
+                break
+            if result.startswith("<<<打回>>>"):
+                result = (
+                    f'"{title}"开发工作被打回,理由如下:\n{result[len("<<<打回>>>"):].strip()}\n\n'
+                    "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
+                )
+                break
+        else:
+            result = f'"{title}"开发工作因为无法预测的错误而失败了'
+        print(result)
+        return result
 
     leader = egent.agent.Agent(
         name="ethan",
