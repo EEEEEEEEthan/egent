@@ -6,6 +6,7 @@
 """
 
 from __future__ import annotations
+from _asyncio import Task
 
 import _bootstrap  # noqa: F401  # 必须在 import egent 之前
 
@@ -143,12 +144,9 @@ async def async_main() -> int:
         ),
     )
     agents[milo.name] = milo
-    #conversation_printer.ConversationPrinter(ethan)
-    #conversation_printer.ConversationPrinter(milo, 1)
-
     async def await_all_agents_idle() -> None:
         while pending_speak_tasks:
-            await asyncio.gather(*tuple(pending_speak_tasks))
+            await asyncio.gather(*tuple[Task[None], ...](pending_speak_tasks))
 
     while True:
         user_input = input(">>> ").strip()
