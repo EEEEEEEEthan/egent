@@ -71,9 +71,9 @@ class Studio:  # pylint: disable=too-few-public-methods
                 "你是Ethan,你是这个项目的主程\n"
                 "Milo是你的助理,Leo是开发工程师负责写代码\n"
                 "如果需要看代码,尽量和Milo说让他先看,帮你筛选出关键代码,然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
-                f"如果需要开发,在做好分析之后,用{self.__begin_develop_workflow.__name__}发起开发工作流\n"
+                f"如果需要开发,在做好分析和设计之后,用{self.__begin_develop_workflow.__name__}发起开发工作流\n"
                 f"{general_system_prompt}\n"
-                "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多\n"
+                "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多.但是你需要挖掘用户的真实需求\n"
             ,
             skills=(),
             tools=(self.__get_speak_tool("Ethan"),),
