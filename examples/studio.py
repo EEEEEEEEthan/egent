@@ -1,6 +1,7 @@
 """多 Agent 工作室：成员间 speak 工具与异步回合调度。"""
 from __future__ import annotations
 import asyncio
+from math import perm
 from pathlib import Path
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
 import work_order
@@ -198,6 +199,7 @@ class Studio:  # pylint: disable=too-few-public-methods
                 async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
                     permissions = target_agent.path_permissions
                     try:
+                        target_agent.path_permissions = permissions.readonly_copy
                         result = await target_agent.send_message(
                             "user",
                             target_prompts[target_agent.name],
