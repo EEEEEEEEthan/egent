@@ -97,8 +97,8 @@ class Workflow:
             self.__developer.add_message(
                 "user",
                 f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                f"如果开发完成，请输出`{finish_marker}`并输出简报，例如`{finish_marker}\n简报`\n"
-                f"如果你认为开发工作无法完成，或者需求不够明确，请输出`{reject_marker}`并输出简报，例如`{reject_marker}\n简报`\n"
+                f"如果开发完成，请先输出`{finish_marker}`并输出简报，例如`{finish_marker}\n简报`\n{finish_marker}必须在第一行的最开始\n"
+                f"如果你认为开发工作无法完成，或者需求不够明确，请输出`{reject_marker}`并输出简报，例如`{reject_marker}\n简报`\n{reject_marker}必须在第一行的最开始\n"
             )
             result = (await self.__developer.send()).strip()
             if result.startswith(finish_marker):
@@ -130,7 +130,7 @@ class Workflow:
                 "user",
                 f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
                 f"如果审查通过，请输出`{pass_marker}`并输出简要说明，例如`{pass_marker}\n说明`\n"
-                f"如果审查不通过，请输出三个尖括号包裹的`{fail_marker}`并输出具体意见，例如`{fail_marker}\n意见`\n"
+                f"如果审查不通过，请输出三个尖括号包裹的`{fail_marker}`并输出具体意见，例如`{fail_marker}\n意见`\n{fail_marker}必须在第一行的最开始\n"
             )
             result = (await reviewer.send()).strip()
             if result.startswith(pass_marker):
