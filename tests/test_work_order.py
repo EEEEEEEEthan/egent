@@ -10,8 +10,9 @@ import examples.work_order as work_order
 class _StubAgent:
     """仅实现 WorkOrderNode 所需接口的测试替身。"""
 
-    def __init__(self, replies: list[str]) -> None:
+    def __init__(self, replies: list[str], *, name: str = "stub") -> None:
         self._replies = list(replies)
+        self.name = name
         self.messages: list[tuple[str, str]] = []
 
     def add_message(self, role: str, content: str, **_extra: object) -> dict[str, str]:
@@ -27,10 +28,9 @@ class _StubAgent:
 @pytest.mark.asyncio
 async def test_leaf_node_returns_history_on_valid_submission() -> None:
     """叶节点验收通过后应返回累积历史。"""
-    agent = _StubAgent(["完成报告\nDONE"])
+    agent = _StubAgent(["完成报告\nDONE"], name="review")
     node = work_order.WorkOrderNode(
         agent=agent,  # type: ignore[arg-type]
-        sign="review",
         submit_notification="请按格式提交",
         switcher=lambda result: (None, result.removeprefix("完成报告\n") or None),
         validator=lambda result: "太短" if len(result) < 4 else None,
@@ -46,7 +46,7 @@ async def test_leaf_node_returns_history_on_valid_submission() -> None:
 @pytest.mark.asyncio
 async def test_leaf_node_retries_on_validation_failure() -> None:
     """验收失败应打回并继续请求。"""
-    agent = _StubAgent(["bad", "完成报告\nOK"])
+    agent = _StubAgent(["bad", "完成报告\nOK"], name="leaf")
     reject_count = 0
 
     def validator(result: str) -> str | None:
@@ -58,7 +58,6 @@ async def test_leaf_node_retries_on_validation_failure() -> None:
 
     node = work_order.WorkOrderNode(
         agent=agent,  # type: ignore[arg-type]
-        sign="leaf",
         submit_notification="提交",
         switcher=lambda result: (
             None,
@@ -79,17 +78,15 @@ async def test_leaf_node_retries_on_validation_failure() -> None:
 @pytest.mark.asyncio
 async def test_internal_node_hands_off_to_next_node() -> None:
     """中间节点应把累积历史交给下一节点。"""
-    leaf_agent = _StubAgent(["完成\nleaf-body"])
+    leaf_agent = _StubAgent(["完成\nleaf-body"], name="leaf")
     leaf = work_order.WorkOrderNode(
         agent=leaf_agent,  # type: ignore[arg-type]
-        sign="leaf",
         submit_notification="leaf-submit",
         switcher=lambda result: (None, result.removeprefix("完成\n") or None),
     )
-    root_agent = _StubAgent(["移交\nhandoff-body"])
+    root_agent = _StubAgent(["移交\nhandoff-body"], name="root")
     root = work_order.WorkOrderNode(
         agent=root_agent,  # type: ignore[arg-type]
-        sign="root",
         submit_notification="root-submit",
         switcher=lambda result: (
             (leaf, result.removeprefix("移交\n"))
@@ -108,7 +105,7 @@ async def test_internal_node_hands_off_to_next_node() -> None:
 @pytest.mark.asyncio
 async def test_node_retries_when_switcher_returns_no_message() -> None:
     """未按格式回复时应重复提交轮次。"""
-    agent = _StubAgent(["garbage", "完成\nok"])
+    agent = _StubAgent(["garbage", "完成\nok"], name="n")
 
     def switcher(result: str) -> tuple[work_order.WorkOrderNode | None, str | None]:
         if result.startswith("完成"):
@@ -117,7 +114,6 @@ async def test_node_retries_when_switcher_returns_no_message() -> None:
 
     node = work_order.WorkOrderNode(
         agent=agent,  # type: ignore[arg-type]
-        sign="n",
         submit_notification="fmt",
         switcher=switcher,
     )

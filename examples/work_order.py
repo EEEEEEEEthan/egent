@@ -15,13 +15,17 @@ class WorkOrderNode:
     """工单图中的一个节点，构造时与 Agent、路由与验收逻辑绑定。"""
 
     agent: egent.agent.Agent
-    sign: str
     submit_notification: str
     switcher: Callable[[str], tuple[WorkOrderNode | None, HandoffMessage]]
     validator: Validator = field(default=lambda _result: None)
 
+    @property
+    def sign(self) -> str:
+        return self.agent.name
+
     async def begin(self, prompt: str, history: str = "") -> str:
         """注入本节点提示词并驱动 Agent 运转，直至完成或移交下一节点。"""
+        await self.agent.await_free()
         if prompt:
             self.agent.add_message("system", prompt)
         while True:

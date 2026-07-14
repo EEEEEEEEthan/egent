@@ -3,9 +3,22 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
+import work_order
 import egent.agent
 import egent.builtin_tools.path_validator
 import egent.tool
+
+_WORKFLOW_DONE_MARKER = "<<<完成>>>"
+_WORKFLOW_ABORT_MARKER = "<<<放弃>>>"
+
+
+def _coding_workflow_switcher(
+    result: str,
+) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
+    if result.startswith(_WORKFLOW_DONE_MARKER) or result.startswith(_WORKFLOW_ABORT_MARKER):
+        return None, result
+    return None, None
+
 
 class Studio:  # pylint: disable=too-few-public-methods
     """同一对话空间内的 Agent 集合；成员通过 speak 工具互相对话。"""
@@ -115,6 +128,28 @@ class Studio:  # pylint: disable=too-few-public-methods
         while self.__pending_speak_tasks:
             await asyncio.gather(*self.__pending_speak_tasks)
         return ethan_reply
+
+    async def begin_develop_workflow(self, message: str) -> str:
+        """开始开发工作流.
+        @param message: 用户消息
+        @return: 开发工作流结果
+        """
+        def coding_switcher(
+            result: str,
+        ) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
+            if result.startswith("<<<完成>>>") or result.startswith("<<<放弃>>>"):
+                return None, result
+            return None, None
+
+        node_coding = work_order.WorkOrderNode(
+            agent=self.__agents["Ethan"],
+            submit_notification=(
+                "工作完毕后回复三个尖括号包裹的`完成`或者`放弃`,"
+                "并说明理由,例如`<<<放弃>>>我没有权限编辑`"
+            ),
+            switcher=coding_switcher,
+        )
+        return await node_coding.begin(message, "")
 
     @staticmethod
     def __print_speech(speaker: str, body: str) -> None:
