@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
@@ -42,6 +43,7 @@ _EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=(f"{_WORKING_DIRECTORY}/*",),
     blacklist=(
         f"{_WORKING_DIRECTORY}/.egent/.model.toml",
+        f"{_WORKING_DIRECTORY}/.egent/.temp/task-*",
     ),
 )
 
@@ -56,6 +58,15 @@ async def async_main() -> int:
         """
         developer_name = "Leo"
         print("委派开发工作")
+        
+        # 将任务描述写入临时文件
+        task_dir = Path(".egent/.temp")
+        task_dir.mkdir(parents=True, exist_ok=True)
+        task_id = uuid.uuid4().hex[:8]
+        task_file = task_dir / f"task-{task_id}.txt"
+        task_file.write_text(description, encoding="utf-8")
+        task_path = task_file.as_posix()
+        
         developer = egent.agent.Agent(
             name=developer_name,
             settings="gpt5",
@@ -67,7 +78,10 @@ async def async_main() -> int:
             readable=_READABLE_RULE,
             editable=_EDITABLE_RULE,
         )
-        developer.add_message("user", description)
+        developer.add_message(
+            "user",
+            f"需求文件在 {task_path}，请读取后开始开发。注意：你无权编辑该需求文件。",
+        )
         reminder = (
             "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
             "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
