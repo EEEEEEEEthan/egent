@@ -10,6 +10,9 @@ import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 im
 import egent.agent
 import egent.builtin_tools.path_validator
 
+BLUE = "\033[34m"
+RESET = "\033[0m"
+
 _WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
 DISCOVERABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=("*",),
@@ -67,19 +70,19 @@ class Workflow:
 
     async def start(self, description: str) -> str:
         Path(self.task_path).write_text(description, encoding="utf-8")
-        print(f"开始开发工作流: {self.title}\n{description}")
+        print(f"{BLUE}开始开发工作流{RESET}: {self.title}\n{description}")
         for _ in range(5):
-            print("开始编码")
+            print(f"{BLUE}开始编码{RESET}")
             success, message = await self.__coding()
             if not success:
-                print(f"编码打回,理由如下:\n{message}")
+                print(f"{BLUE}编码打回{RESET},理由如下:\n{message}")
                 return message
-            print("开始审查")
+            print(f"{BLUE}开始审查{RESET}")
             passed, comment = await self.__review()
             if passed:
-                print(f"审查通过,简报如下:\n{message}")
+                print(f"{BLUE}审查通过{RESET},简报如下:\n{message}")
                 return message
-            print(f"审查未通过,审查意见如下:\n{comment}")
+            print(f"{BLUE}审查未通过{RESET},审查意见如下:\n{comment}")
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
