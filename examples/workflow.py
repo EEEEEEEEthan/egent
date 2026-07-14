@@ -53,6 +53,18 @@ class Workflow:
         task_file = task_dir / f"task-{task_id}.txt"
         self.task_path = task_file.as_posix()
         self.log_path = task_dir / f"task-{task_id}.log"
+        developer_name = "Leo"
+        self.__developer = egent.agent.Agent(
+            name=developer_name,
+            settings="gpt5",
+            system_prompt="你是开发工程师，负责根据描述开发代码",
+            tools=(),
+        )
+        self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=DISCOVERABLE_RULE,
+            readable=READABLE_RULE,
+            editable=EDITABLE_RULE,
+        )
 
     async def start(self, description: str) -> str:
         Path(self.task_path).write_text(description, encoding="utf-8")
@@ -65,21 +77,9 @@ class Workflow:
     
     async def __coding(self) -> tuple[bool, str]:
         """根据描述执行开发工作并返回简报。"""
-        developer_name = "Leo"
-        developer = egent.agent.Agent(
-            name=developer_name,
-            settings="gpt5",
-            system_prompt="你是开发工程师，负责根据描述开发代码",
-            tools=(),
-        )
-        developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
-            discoverable=DISCOVERABLE_RULE,
-            readable=READABLE_RULE,
-            editable=EDITABLE_RULE,
-        )
         result = ""
         for _ in range(5):
-            developer.add_message(
+            self.__developer.add_message(
                 "user",
                 f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
                 "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
