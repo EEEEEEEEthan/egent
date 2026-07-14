@@ -85,7 +85,7 @@ class Workflow:
             )
             finish_marker = "<<<完成>>>"
             reject_marker = "<<<打回>>>"
-            result = await self.__developer.send()
+            result = (await self.__developer.send()).strip()
             if result.startswith(finish_marker):
                 return True, f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
             if result.startswith(reject_marker):
