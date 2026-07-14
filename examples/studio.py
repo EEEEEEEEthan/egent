@@ -35,6 +35,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             f"{_WORKING_DIRECTORY}/.git/*",
             f"{_WORKING_DIRECTORY}/.egent",
             f"{_WORKING_DIRECTORY}/.egent/*",
+            f"{_WORKING_DIRECTORY}/.egent/.model.toml",
             f"{_WORKING_DIRECTORY}/**/__pycache__",
             f"{_WORKING_DIRECTORY}/**/__pycache__/*",
             f"{_WORKING_DIRECTORY}/**/.pytest_cache",
