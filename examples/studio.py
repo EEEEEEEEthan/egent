@@ -152,6 +152,8 @@ class Studio:  # pylint: disable=too-few-public-methods
         @param prompt: 开发需求.请务必精准,措辞简练
         @return: 开发工作流结果
         """
+        print("\033[34mbegin_develop_workflow\033[0m")
+        print(prompt)
         def coding_switcher(
             result: str,
         ) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
