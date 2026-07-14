@@ -2,11 +2,12 @@
 
 运行前请在**当前工作目录**配置 ``.egent/.model.toml``::
 
-    pip install -e .
     python examples/example_agent.py
 """
 
 from __future__ import annotations
+
+import _bootstrap  # noqa: F401  # 必须在 import egent 之前
 
 import asyncio
 from pathlib import Path
@@ -14,6 +15,7 @@ from pathlib import Path
 import conversation_printer
 import egent.agent
 import egent.builtin_tools.path_validator
+import egent.tool
 
 _EXAMPLE_GREET_SKILL = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "example-greet"
 
@@ -47,6 +49,7 @@ async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     agents: dict[str, egent.agent.Agent] = {}
     def get_speak_tool(from_name: str):
+        @egent.tool.end_conversation
         async def speak_tool(to_name: str, prompt: str) -> str:
             """对指定角色说话，并得到回复
             @param to_name: 说话对象
@@ -73,7 +76,7 @@ async def async_main() -> int:
         settings="gpt5",
         system_prompt=
             "你是ethan，你是这个项目的主程\n"
-            "milo是你的助理，如果需要看代码，可以和milo说让他先看，帮你筛选出关键代码"
+            "milo是你的助理，如果需要看代码，尽量和milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这回耽误你太多时间"
         ,
         skills=(),
         tools=(get_speak_tool("ethan"),),
@@ -100,8 +103,8 @@ async def async_main() -> int:
         ),
     )
     agents[milo.name] = milo
-    #conversation_printer.ConversationPrinter(ethan)
-    #conversation_printer.ConversationPrinter(milo, 1)
+    conversation_printer.ConversationPrinter(ethan)
+    conversation_printer.ConversationPrinter(milo, 1)
     while True:
         ethan.add_message("user", input(">>> ").strip())
         await ethan.send()

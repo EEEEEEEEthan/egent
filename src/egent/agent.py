@@ -138,7 +138,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__is_sending = False
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = self.__build_skills(skills)
-        self.__api_tools, self.__tool_handlers = egent.tool.resolve_tools(
+        (
+            self.__api_tools,
+            self.__tool_handlers,
+            self.__conversation_terminating_tool_names,
+        ) = egent.tool.resolve_tools(
             [
                 *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
                 *egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools,
@@ -219,6 +223,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                     for tool_call in tool_calls
                 ],
             )
+            conversation_terminating_tool_name: str | None = None
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
                 function_arguments = egent.tool.sanitize_tool_arguments_json(
@@ -243,6 +248,12 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                     result=tool_message["content"],
                     is_exception=is_exception,
                 ))
+                if function_name in self.__conversation_terminating_tool_names:
+                    conversation_terminating_tool_name = function_name
+            if conversation_terminating_tool_name is not None:
+                reply_text = f"使用了{conversation_terminating_tool_name}"
+                self.__emit_event(TurnCompleted(reply_text))
+                return reply_text
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""

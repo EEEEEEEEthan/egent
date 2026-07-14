@@ -57,9 +57,12 @@ async def test_tool_handler_async() -> None:
 
 def test_resolve_tools() -> None:
     """resolve_tools 应同时生成 API tools 与 name 到 handler 的映射。"""
-    api_tools, handlers = egent.tool.resolve_tools([add_numbers, echo_async])
+    api_tools, handlers, conversation_terminating_tool_names = egent.tool.resolve_tools(
+        [add_numbers, echo_async],
+    )
 
     assert len(api_tools) == 2
+    assert conversation_terminating_tool_names == frozenset()
     assert handlers["add_numbers"]('{"left": 3, "right": 4}') == "7"
     assert "echo_async" in handlers
 
@@ -116,7 +119,9 @@ def test_resolve_tools_deduplicate_names() -> None:
         return f"Hello, {name}!"
 
     # 两个函数同名（用同一个函数模拟重名场景）
-    api_tools, handlers = egent.tool.resolve_tools([greet, greet])
+    api_tools, handlers, _conversation_terminating_tool_names = egent.tool.resolve_tools(
+        [greet, greet],
+    )
 
     assert len(api_tools) == 2
     assert api_tools[0]["function"]["name"] == "greet"
@@ -140,7 +145,9 @@ def test_resolve_tools_multiple_duplicates() -> None:
         """
         return x * 2
 
-    api_tools, handlers = egent.tool.resolve_tools([calc, calc, calc, calc])
+    api_tools, handlers, _conversation_terminating_tool_names = egent.tool.resolve_tools(
+        [calc, calc, calc, calc],
+    )
 
     assert len(api_tools) == 4
     assert api_tools[0]["function"]["name"] == "calc"
@@ -183,3 +190,22 @@ def test_tool_handler_accepts_string_null_optional_argument() -> None:
     result = handler('{"path": "foo.txt", "limit": "null"}')
 
     assert result == "foo.txt:None"
+
+
+def test_end_conversation_registers_terminating_tool_name() -> None:
+    """end_conversation 应把注册名写入终结聊天工具集合。"""
+    @egent.tool.end_conversation
+    def finish_task(summary: str) -> str:
+        """结束任务。
+
+        @param summary 结果摘要
+        """
+        return summary
+
+    api_tools, handlers, conversation_terminating_tool_names = egent.tool.resolve_tools(
+        [add_numbers, finish_task],
+    )
+
+    assert api_tools[1]["function"]["name"] == "finish_task"
+    assert conversation_terminating_tool_names == frozenset({"finish_task"})
+    assert handlers["finish_task"]('{"summary": "done"}') == "done"

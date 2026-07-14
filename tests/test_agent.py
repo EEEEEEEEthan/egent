@@ -14,6 +14,7 @@ from openai import APIStatusError
 
 import egent.agent
 import egent.builtin_tools.path_validator
+import egent.tool
 
 
 def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
@@ -38,6 +39,10 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
     assert reviewer._Agent__client is leader._Agent__client
     assert reviewer._Agent__api_tools is leader._Agent__api_tools
     assert reviewer._Agent__tool_handlers is leader._Agent__tool_handlers
+    assert (
+        reviewer._Agent__conversation_terminating_tool_names
+        is leader._Agent__conversation_terminating_tool_names
+    )
     assert reviewer.path_permissions is leader.path_permissions
     assert reviewer._Agent__messages == leader._Agent__messages
     assert reviewer._Agent__messages is not leader._Agent__messages
@@ -250,3 +255,89 @@ def pydantic_core_init_error(
         "input": input_value,
         "url": "https://errors.pydantic.dev/2.13/v/int_parsing",
     }
+
+
+@pytest.mark.asyncio
+async def test_send_runs_all_tool_calls_before_conversation_terminating_tool(monkeypatch) -> None:
+    """终结聊天工具应在本轮全部 tool_calls 执行后再结束 send()。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+
+    execution_order: list[str] = []
+
+    def note_step(step_name: str) -> str:
+        """记录执行顺序。
+
+        @param step_name 步骤名
+        """
+        execution_order.append(step_name)
+        return step_name
+
+    @egent.tool.end_conversation
+    def finish_task(summary: str) -> str:
+        """结束任务。
+
+        @param summary 结果摘要
+        """
+        execution_order.append(f"finish:{summary}")
+        return summary
+
+    agent = egent.agent.Agent(settings="test", tools=[note_step, finish_task])
+    fetch_count = 0
+
+    class FakeToolCall:
+        def __init__(self, call_id: str, name: str, arguments: str) -> None:
+            self.id = call_id
+            self.function = SimpleNamespace(name=name, arguments=arguments)
+
+        def model_dump(self) -> dict[str, object]:
+            return {
+                "id": self.id,
+                "function": {
+                    "name": self.function.name,
+                    "arguments": self.function.arguments,
+                },
+            }
+
+    async def fake_fetch_chat_completion() -> SimpleNamespace:
+        nonlocal fetch_count
+        fetch_count += 1
+        if fetch_count == 1:
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content="",
+                            tool_calls=[
+                                FakeToolCall("call-1", "note_step", '{"step_name": "first"}'),
+                                FakeToolCall("call-2", "finish_task", '{"summary": "done"}'),
+                                FakeToolCall("call-3", "note_step", '{"step_name": "last"}'),
+                            ],
+                        ),
+                    ),
+                ],
+            )
+        raise AssertionError("终结聊天工具执行后不应再次请求模型")
+
+    turn_completed_texts: list[str] = []
+    agent.add_listener(
+        lambda event: turn_completed_texts.append(event.text)
+        if isinstance(event, egent.agent.TurnCompleted)
+        else None,
+    )
+    monkeypatch.setattr(agent, "_Agent__fetch_chat_completion", fake_fetch_chat_completion)
+
+    result = await agent.send()
+
+    assert result == "使用了finish_task"
+    assert execution_order == ["first", "finish:done", "last"]
+    assert fetch_count == 1
+    assert turn_completed_texts == ["使用了finish_task"]
+    tool_messages = [message for message in agent._Agent__messages if message["role"] == "tool"]
+    assert [message["content"] for message in tool_messages] == ["first", "done", "last"]

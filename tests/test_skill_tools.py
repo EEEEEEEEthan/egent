@@ -141,7 +141,7 @@ def test_skill_tools_register_with_resolve_tools(tmp_path) -> None:
     skill_dir = tmp_path / "demo"
     _write_skill(skill_dir, "demo", "演示")
     tools = egent.builtin_tools.skill_tools.get_skill_tools(egent.agent.Agent._Agent__build_skills([skill_dir])[0])
-    api_tools, _handlers = egent.tool.resolve_tools(tools)
+    api_tools, _handlers, _conversation_terminating_tool_names = egent.tool.resolve_tools(tools)
 
     assert {tool["function"]["name"] for tool in api_tools} == {
         "learn_skill",

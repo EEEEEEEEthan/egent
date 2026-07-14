@@ -17,12 +17,24 @@ from openai.types.chat.chat_completion_tool_union_param import (
 ToolCallable = Callable[..., Any]
 ToolHandler = Callable[[str], str | Awaitable[str]]
 
+_END_CONVERSATION_ATTRIBUTE = "_egent_end_conversation"
 _NULL_LITERAL_STRINGS = frozenset({"null", "none", "undefined"})
 
 _PARAM_PATTERN = re.compile(
     r"^\s*@param\s+(\w+)\s*:?\s*(.+)$",
     re.MULTILINE,
 )
+
+def end_conversation(function: ToolCallable) -> ToolCallable:
+    """标记工具：本轮 tool_calls 全部执行后结束 send()，不再请求模型。"""
+    setattr(function, _END_CONVERSATION_ATTRIBUTE, True)
+    return function
+
+
+def function_ends_conversation(function: ToolCallable) -> bool:
+    """工具是否带有 end_conversation 标记。"""
+    return bool(getattr(function, _END_CONVERSATION_ATTRIBUTE, False))
+
 
 def sanitize_tool_arguments_json(arguments_json: str) -> str:
     """修正模型常见的 tool arguments JSON 瑕疵（如可选参数写成字符串 \"null\"）。"""
@@ -65,13 +77,18 @@ def tool_handler_from_function(function: ToolCallable) -> ToolHandler:
 
 def resolve_tools(
     tools: list[ToolCallable],
-) -> tuple[list[ChatCompletionToolUnionParam], dict[str, ToolHandler]]:
-    """把函数列表解析为 API tools 与 name -> handler 映射。
+) -> tuple[
+    list[ChatCompletionToolUnionParam],
+    dict[str, ToolHandler],
+    frozenset[str],
+]:
+    """把函数列表解析为 API tools、name -> handler 映射与终结聊天工具名集合。
 
     自动处理重名：首次出现保留原名，后续重名追加 _2、_3 等后缀。
     """
     api_tools: list[ChatCompletionToolUnionParam] = []
     tool_handlers: dict[str, ToolHandler] = {}
+    conversation_terminating_tool_names: set[str] = set()
     seen_names: dict[str, int] = {}
     for function in tools:
         api_tool = tool_from_function(function)
@@ -88,7 +105,9 @@ def resolve_tools(
         api_tool["function"]["name"] = unique_name
         api_tools.append(api_tool)
         tool_handlers[unique_name] = tool_handler_from_function(function)
-    return api_tools, tool_handlers
+        if function_ends_conversation(function):
+            conversation_terminating_tool_names.add(unique_name)
+    return api_tools, tool_handlers, frozenset(conversation_terminating_tool_names)
 
 
 def _create_arguments_model(function: ToolCallable) -> type[pydantic.BaseModel]:
