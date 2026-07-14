@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from copy import copy
 from types import SimpleNamespace
 
@@ -374,3 +375,55 @@ async def test_send_blocks_concurrent_send_and_add_message(monkeypatch) -> None:
     assert await agent.send() == "ok"
     assert send_entered
     agent.add_message("user", "after send")
+
+
+def _make_test_agent(monkeypatch) -> egent.agent.Agent:
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+    return egent.agent.Agent(settings="test")
+
+
+def _ok_completion() -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="ok", tool_calls=[]))],
+    )
+
+
+@pytest.mark.asyncio
+async def test_await_free_returns_immediately_when_idle(monkeypatch) -> None:
+    """空闲时 await_free 应立即返回且未 busy。"""
+    agent = _make_test_agent(monkeypatch)
+    await agent.await_free()
+    assert not agent.busy
+
+
+@pytest.mark.asyncio
+async def test_await_free_waits_until_send_ends(monkeypatch) -> None:
+    """send 进行中时 await_free 应阻塞到结束。"""
+    agent = _make_test_agent(monkeypatch)
+    release_send = asyncio.Event()
+
+    async def fake_fetch_chat_completion() -> SimpleNamespace:
+        await release_send.wait()
+        return _ok_completion()
+
+    monkeypatch.setattr(agent, "_Agent__fetch_chat_completion", fake_fetch_chat_completion)
+
+    send_task = asyncio.create_task(agent.send())
+    await asyncio.sleep(0)
+    assert agent.busy
+
+    wait_task = asyncio.create_task(agent.await_free())
+    await asyncio.sleep(0)
+    assert not wait_task.done()
+
+    release_send.set()
+    await send_task
+    await wait_task
+    assert not agent.busy

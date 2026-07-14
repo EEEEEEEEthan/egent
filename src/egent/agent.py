@@ -136,6 +136,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__deferred_messages: list[ChatMessage] = []
         self.__pending_tool_response_count = 0
         self.__is_busy = False
+        self.__busy_condition = asyncio.Condition()
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = self.__build_skills(skills)
         (
@@ -165,6 +166,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 state[key] = deepcopy(value)
             elif key.endswith("__event_listeners"):
                 state[key] = []
+            elif key.endswith("__busy_condition"):
+                state[key] = asyncio.Condition()
         cloned.__dict__.update(state)
         return cloned
 
@@ -181,6 +184,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         """是否正在 send。"""
         return self.__is_busy
 
+    async def await_free(self) -> None:
+        """等待 send 结束。
+
+        返回时保证未 busy；若并发等待，先返回的协程可能再次 send，
+        其余协程会继续等到下一次空闲。
+        """
+        async with self.__busy_condition:
+            while self.__is_busy:
+                await self.__busy_condition.wait()
+
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
         if self.__is_busy:
@@ -195,7 +208,9 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         try:
             return await self.__send_loop()
         finally:
-            self.__is_busy = False
+            async with self.__busy_condition:
+                self.__is_busy = False
+                self.__busy_condition.notify_all()
 
     async def __send_loop(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         while True:
