@@ -67,33 +67,69 @@ class Workflow:
 
     async def start(self, description: str) -> str:
         Path(self.task_path).write_text(description, encoding="utf-8")
-        success, message = await self.__coding()
-        if success:
-            #review
-            return message
-        else:
-            return message
-    
-    async def __coding(self) -> tuple[bool, str]:
-        """根据描述执行开发工作并返回简报。"""
         for _ in range(5):
+            success, message = await self.__coding()
+            if not success:
+                return message
+            passed, comment = await self.__review()
+            if passed:
+                return message
             self.__developer.add_message(
                 "user",
-                f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
-                "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
+                f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
             )
-            finish_marker = "<<<完成>>>"
-            reject_marker = "<<<打回>>>"
-            result = (await self.__developer.send()).strip()
-            if result.startswith(finish_marker):
-                return True, f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
-            if result.startswith(reject_marker):
-                return False, (
-                    f'"{self.title}"开发工作被打回,理由如下:\n{result[len(reject_marker):].strip()}\n\n'
-                    "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
-                )
+        return f'"{self.title}"开发工作因为超过最大审查轮次而失败了'
+
+    async def __coding(self) -> tuple[bool, str]:
+        """根据描述执行开发工作并返回简报。"""
+        self.__developer.add_message(
+            "user",
+            f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
+            "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
+            "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
+        )
+        finish_marker = "<<<完成>>>"
+        reject_marker = "<<<打回>>>"
+        result = (await self.__developer.send()).strip()
+        if result.startswith(finish_marker):
+            return True, f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
+        if result.startswith(reject_marker):
+            return False, (
+                f'"{self.title}"开发工作被打回,理由如下:\n{result[len(reject_marker):].strip()}\n\n'
+                "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
+            )
         return False, f'"{self.title}"开发工作因为无法预测的错误而失败了'
+
+    async def __review(self) -> tuple[bool, str]:
+        """审查开发成果，返回 (passed, comment)。"""
+        reviewer = egent.agent.Agent(
+            name="Reviewer",
+            settings="gpt5",
+            system_prompt=(
+                "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
+                "请读取需求文件并检查代码变更，判断是否满足需求。"
+                "如果审查通过，请输出三个尖括号包裹的`通过`并输出简要说明，例如`<<<通过>>>\n说明`\n"
+                "如果审查不通过，请输出三个尖括号包裹的`不通过`并输出具体意见，例如`<<<不通过>>>\n意见`\n"
+            ),
+            tools=(),
+        )
+        reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=DISCOVERABLE_RULE,
+            readable=READABLE_RULE,
+            editable=NO_EDITABLE_RULE,
+        )
+        reviewer.add_message(
+            "user",
+            f"需求文件在 {self.task_path}，请审查代码是否符合需求。",
+        )
+        result = (await reviewer.send()).strip()
+        pass_marker = "<<<通过>>>"
+        fail_marker = "<<<不通过>>>"
+        if result.startswith(pass_marker):
+            return True, result[len(pass_marker):].strip()
+        if result.startswith(fail_marker):
+            return False, result[len(fail_marker):].strip()
+        return False, result
 
 async def begin_work_flow(
     leader: egent.agent.Agent,
