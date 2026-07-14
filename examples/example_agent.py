@@ -86,18 +86,29 @@ async def async_main() -> int:
                     if agent.name not in targets and agent.name != from_name:
                         agent.add_message("system", f"{name}回复{from_name}:\n{result}")
 
-            async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
-                try:
-                    result = await target_agent.send()
-                except Exception as error:  # pylint: disable=broad-exception-caught
-                    result = f"[发送失败] {error}"
-                on_target_replied(target_agent.name, result)
+            async def dispatch_speak_round() -> None:
+                async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
+                    try:
+                        result = await target_agent.send()
+                    except Exception as error:  # pylint: disable=broad-exception-caught
+                        result = f"[发送失败] {error}"
+                    on_target_replied(target_agent.name, result)
 
-            for agent in agents.values():
-                if agent.name in targets:
-                    task = asyncio.create_task(dispatch_target_reply(agent))
-                    pending_speak_tasks.add(task)
-                    task.add_done_callback(pending_speak_tasks.discard)
+                target_agents = [
+                    agent for agent in agents.values()
+                    if agent.name in targets
+                ]
+                await asyncio.gather(
+                    *(dispatch_target_reply(agent) for agent in target_agents)
+                )
+                from_agent = agents.get(from_name)
+                if from_agent is not None:
+                    _print_speech(from_name, await from_agent.send())
+
+            if any(agent.name in targets for agent in agents.values()):
+                task = asyncio.create_task(dispatch_speak_round())
+                pending_speak_tasks.add(task)
+                task.add_done_callback(pending_speak_tasks.discard)
             return "message sent."
         return speak_tool
     # ethan
@@ -106,7 +117,8 @@ async def async_main() -> int:
         settings="gpt5",
         system_prompt=
             "你是ethan，你是这个项目的主程\n"
-            "milo是你的助理，如果需要看代码，尽量和milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间"
+            "milo是你的助理，如果需要看代码，尽量和milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
+            "这是群聊,所以你不必把别人的话复述给我\n"
         ,
         skills=(),
         tools=(get_speak_tool("ethan"),),
