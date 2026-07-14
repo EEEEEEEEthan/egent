@@ -64,12 +64,24 @@ class Studio:  # pylint: disable=too-few-public-methods
         general_system_prompt = (
             "你不必复述群聊内容"
         )
+        def get_introduce(name: str) -> str:
+            def role_line(role: str, description: str) -> str:
+                if name == role:
+                    return f"你是{role},{description}"
+                return f"{name}{description}"
+
+            lines = [
+                "你们在这个团队进行开发",
+                role_line("Ethan", "是这个项目的主程"),
+                role_line("Milo", "是Ethan的助理,负责协助收集项目资料以及分析需求"),
+                role_line("Leo", "是开发工程师负责写代码"),
+            ]
+            return "\n".join(lines) + "\n"
         self.__agents["Ethan"] = egent.agent.Agent(
             name="Ethan",
             settings="gpt5",
             system_prompt=
-                "你是Ethan,你是这个项目的主程\n"
-                "Milo是你的助理,Leo是开发工程师负责写代码\n"
+                f"{get_introduce("Ethan")}\n"
                 "如果需要看代码,尽量和Milo说让他先看,帮你筛选出关键代码,然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
                 f"如果需要开发,在做好分析和设计之后,用{self.__begin_develop_workflow.__name__}发起开发工作流\n"
                 f"{general_system_prompt}\n"
@@ -89,7 +101,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             name="Milo",
             settings="gpt5",
             system_prompt=
-                "你是Milo,是Ethan的助理。Ethan是这个项目的主程\n"
+                f"{get_introduce("Ethan")}\n"
                 f"{general_system_prompt}\n"
             ,
             skills=(),
@@ -106,8 +118,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             name="Leo",
             settings="gpt5",
             system_prompt=
-                "你是Leo,开发工程师,负责编写和修改代码\n"
-                "Ethan是主程,Milo负责帮Ethan读代码\n"
+                f"{get_introduce("Ethan")}\n"
                 "收到写代码任务后,先了解上下文再动手,改完简要说明改了什么\n"
                 f"{general_system_prompt}\n"
                 "用户是资深程序员,沟通时不需要解释太多\n"
