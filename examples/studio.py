@@ -1,6 +1,7 @@
 """多 Agent 工作室：成员间私聊工具与异步回合调度。"""
 from __future__ import annotations
 import asyncio
+import subprocess
 from pathlib import Path
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
 import conversation_printer
@@ -157,12 +158,35 @@ class Studio:  # pylint: disable=too-few-public-methods
             if result.strip().startswith("<<<完成>>>") or result.strip().startswith("<<<放弃>>>"):
                 return None, result
             return None, None
+
+        def coding_validator(result: str) -> str | None:
+            project_root = Path(__file__).resolve().parent.parent
+            try:
+                proc = subprocess.run(
+                    ["pytest", "tests/", "-q", "--tb=short"],
+                    cwd=project_root,
+                    capture_output=True,
+                    timeout=120,
+                    text=True,
+                )
+            except subprocess.TimeoutExpired:
+                return "回归测试超时 (120秒)"
+            except FileNotFoundError:
+                return "回归测试失败: 找不到 pytest 命令"
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                return f"回归测试异常: {exc}"
+            if proc.returncode == 0:
+                return None
+            output = (proc.stdout + proc.stderr)[-2000:]
+            return f"回归测试不通过 (exit code {proc.returncode}):\n{output}"
+
         node_coding = work_order.WorkOrderNode(
             agent=self.__agents["Leo"],
             submit_notification=(
                 "工作完毕后回复:先用三个尖括号包裹的`完成`或者`放弃`,然后说明理由,例如`<<<放弃>>>我没有权限编辑`"
             ),
             switcher=coding_switcher,
+            validator=coding_validator,
         )
 
         async def run_develop_workflow() -> None:
