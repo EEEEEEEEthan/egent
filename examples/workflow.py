@@ -35,13 +35,11 @@ NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=(),
     blacklist=("*",),
 )
-_MINIMUM_SCOPE_PRINCIPLE = (
+_CODING_PRINCIPLE = (
     "【最小域原则】定义一个变量，应放在最小域中——只有某个方法调用就定义在方法里；"
     "只有某个分支调用就放在该分支里。需要缓存的另论：类实例缓存放实例成员，"
     "全类共享缓存放静态成员，跨类常量/变量放模块级。"
-    "当最小域原则与linter冲突时，以最小域原则为准。"
-)
-_REDUCE_MEMBER_PRINCIPLE = (
+    "当最小域原则与linter冲突时，以最小域原则为准。\n"
     "【减少成员原则】如果一个变量只用过一次，就应该硬编码到使用处，不要单独定义变量名；"
     "如果一个函数只用过一次，就应该内联到调用处，或者改成闭包定义在调用处内部。"
     "这样可以减少符号表负担，让代码更紧凑。"
@@ -73,8 +71,7 @@ class Workflow:
 
         developer_system_prompt = (
             "你是开发工程师，负责根据描述开发代码。"
-            + _MINIMUM_SCOPE_PRINCIPLE
-            + _REDUCE_MEMBER_PRINCIPLE
+            + _CODING_PRINCIPLE
         )
         editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=(f"{_WORKING_DIRECTORY}/*",),
@@ -182,8 +179,7 @@ class Workflow:
 
         reviewer_system_prompt = (
             "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
-            + _MINIMUM_SCOPE_PRINCIPLE
-            + _REDUCE_MEMBER_PRINCIPLE
+            + _CODING_PRINCIPLE
         )
         reviewer = egent.agent.Agent(
             name="Reviewer",
