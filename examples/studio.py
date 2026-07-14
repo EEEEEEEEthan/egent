@@ -132,9 +132,9 @@ class Studio:  # pylint: disable=too-few-public-methods
                 editable=Studio._EDITABLE_RULE,
             )
         )
-        conversation_printer.ConversationPrinter(self.__agents["Ethan"])
-        conversation_printer.ConversationPrinter(self.__agents["Milo"], 1)
-        conversation_printer.ConversationPrinter(self.__agents["Leo"], 2)
+        #conversation_printer.ConversationPrinter(self.__agents["Ethan"])
+        #conversation_printer.ConversationPrinter(self.__agents["Milo"], 1)
+        #conversation_printer.ConversationPrinter(self.__agents["Leo"], 2)
 
     async def send(self, message: str) -> str:
         """向主程发送用户消息,等待本轮私聊结束并返回其回复。"""
@@ -213,7 +213,7 @@ class Studio:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def __print_speech(speaker: str, body: str) -> None:
-        print(f"\033[31m{speaker}\033[0m:\n\033[37m{body}\033[0m")
+        print(f"\033[32m{speaker}\033[0m:\n\033[37m{body}\033[0m")
 
     def __get_private_chat_tool(self, from_name: str) -> egent.tool.ToolCallable:
         async def private_chat_tool(to_name: str, prompt: str) -> str:
