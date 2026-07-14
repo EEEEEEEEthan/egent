@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
+from examples import conversation_printer
 import work_order
 import egent.agent
 import egent.builtin_tools.path_validator
@@ -130,6 +131,9 @@ class Studio:  # pylint: disable=too-few-public-methods
                 editable=Studio._EDITABLE_RULE,
             )
         )
+        conversation_printer.ConversationPrinter(self.__agents["Ethan"])
+        conversation_printer.ConversationPrinter(self.__agents["Milo"], 1)
+        conversation_printer.ConversationPrinter(self.__agents["Leo"], 2)
 
     async def send(self, message: str) -> str:
         """向主程发送用户消息,等待本轮私聊结束并返回其回复。"""
