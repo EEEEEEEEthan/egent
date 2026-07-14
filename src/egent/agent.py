@@ -135,7 +135,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__messages: list[ChatMessage] = []
         self.__deferred_messages: list[ChatMessage] = []
         self.__pending_tool_response_count = 0
-        self.__is_sending = False
+        self.__is_busy = False
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
         skill_index, skill_catalog = self.__build_skills(skills)
         (
@@ -179,23 +179,23 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     @property
     def busy(self) -> bool:
         """是否正在 send。"""
-        return self.__is_sending
+        return self.__is_busy
 
     def add_message(self, role: ChatRole, content: str, **extra: Any) -> ChatMessage:
         """追加一条消息，不发起请求。超长内容会截断并落盘。"""
-        if self.__is_sending:
+        if self.__is_busy:
             raise RuntimeError("Agent 正在 send，不能 add_message")
         return self.__add_message(role, self.__truncate_message_content(role, content), **extra)
 
     async def send(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
-        if self.__is_sending:
+        if self.__is_busy:
             raise RuntimeError("Agent 正在 send，不能重复 send")
-        self.__is_sending = True
+        self.__is_busy = True
         try:
             return await self.__send_loop()
         finally:
-            self.__is_sending = False
+            self.__is_busy = False
 
     async def __send_loop(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         while True:
