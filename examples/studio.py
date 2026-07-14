@@ -109,8 +109,7 @@ class Studio:  # pylint: disable=too-few-public-methods
     async def send(self, message: str) -> str:
         """向主程发送用户消息,等待本轮群聊结束并返回其回复。"""
         await self.__agents["Ethan"].await_free()
-        self.__agents["Ethan"].add_message("user", f"用户:\n{message}")
-        ethan_reply = await self.__agents["Ethan"].send()
+        ethan_reply = await self.__agents["Ethan"].send_message("user", f"用户:\n{message}")
         if ethan_reply:
             Studio.__print_speech("Ethan", ethan_reply)
         while self.__pending_speak_tasks:
@@ -135,27 +134,34 @@ class Studio:  # pylint: disable=too-few-public-methods
             targets = set[str](to_names)
             target_label = ", ".join(to_names)
             Studio.__print_speech(f"{from_name}->{target_label}", prompt)
+            target_prompts = {
+                agent.name: f"{from_name}对你说:\n{prompt}"
+                for agent in self.__agents.values()
+                if agent.name in targets
+            }
             for agent in self.__agents.values():
-                if agent.name in targets:
-                    agent.add_message("user", f"{from_name}对你说:\n{prompt}")
-                elif agent.name != from_name:
+                if agent.name not in targets and agent.name != from_name:
                     agent.add_message("user", f"{from_name}对{target_label}说:\n{prompt}")
-            def on_target_replied(name: str, result: str) -> None:
-                Studio.__print_speech(f"{name}->{from_name}", result)
-                from_agent.add_message("user", f"{name}回复:\n{result}")
-                for agent in self.__agents.values():
-                    if agent.name not in targets and agent.name != from_name:
-                        agent.add_message("user", f"{name}回复{from_name}:\n{result}")
             async def dispatch_speak_round() -> None:
                 async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
                     permissions = target_agent.path_permissions
                     try:
-                        result = await target_agent.send()
+                        result = await target_agent.send_message(
+                            "user",
+                            target_prompts[target_agent.name],
+                        )
                     except Exception as error:  # pylint: disable=broad-exception-caught
                         result = f"[发送失败] {error}"
                     finally:
                         target_agent.path_permissions = permissions
-                    on_target_replied(target_agent.name, result)
+                    Studio.__print_speech(f"{target_agent.name}->{from_name}", result)
+                    from_agent.add_message("user", f"{target_agent.name}回复:\n{result}")
+                    for agent in self.__agents.values():
+                        if agent.name not in targets and agent.name != from_name:
+                            agent.add_message(
+                                "user",
+                                f"{target_agent.name}回复{from_name}:\n{result}",
+                            )
                 target_agents = [
                     agent for agent in self.__agents.values()
                     if agent.name in targets

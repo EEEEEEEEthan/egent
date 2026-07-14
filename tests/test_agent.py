@@ -398,6 +398,36 @@ async def test_send_blocks_concurrent_send_and_add_message(monkeypatch) -> None:
     agent.add_message("user", "after send")
 
 
+@pytest.mark.asyncio
+async def test_send_message_adds_and_sends(monkeypatch) -> None:
+    """send_message 追加用户消息并立即 send。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+        ),
+    )
+
+    agent = egent.agent.Agent(settings="test")
+
+    async def fake_fetch_chat_completion() -> SimpleNamespace:
+        user_messages = [
+            message["content"]
+            for message in agent._Agent__messages
+            if message["role"] == "user"
+        ]
+        assert user_messages[-1] == "hello"
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="reply", tool_calls=[]))],
+        )
+
+    monkeypatch.setattr(agent, "_Agent__fetch_chat_completion", fake_fetch_chat_completion)
+
+    assert await agent.send_message("user", "hello") == "reply"
+
+
 def _make_test_agent(monkeypatch) -> egent.agent.Agent:
     monkeypatch.setattr(
         "egent.model_settings.ModelSettings.load",

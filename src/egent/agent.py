@@ -222,6 +222,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             raise RuntimeError("Agent 正在 send，不能 add_message")
         return self.__add_message(role, self.__truncate_message_content(role, content), **extra)
 
+    async def send_message(self, role: ChatRole, content: str, **extra: Any) -> str:
+        """追加一条消息并立即请求助手回复。"""
+        self.add_message(role, content, **extra)
+        return await self.send()
+
     async def send(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         if self.__is_busy:
