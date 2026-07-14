@@ -13,9 +13,6 @@ import egent.agent
 import egent.builtin_tools.path_validator
 import egent.tool
 
-BLUE = "\033[34m"
-RESET = "\033[0m"
-
 _WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
 DISCOVERABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=("*",),
@@ -34,21 +31,11 @@ READABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=("*",),
     blacklist=(f"{_WORKING_DIRECTORY}/.egent/.model.toml",),
 )
-NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
-    whitelist=(),
-    blacklist=("*",),
+_MINIMUM_SCOPE_PRINCIPLE = (
+    "【最小域原则】定义一个变量，应放在最小域中——只有某个方法调用就定义在方法里；"
+    "只有某个分支调用就放在该分支里。需要缓存的另论：类实例缓存放实例成员，"
+    "全类共享缓存放静态成员，跨类常量/变量放模块级。"
 )
-EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
-    whitelist=(f"{_WORKING_DIRECTORY}/*",),
-    blacklist=(
-        f"{_WORKING_DIRECTORY}/.egent/.model.toml",
-        f"{_WORKING_DIRECTORY}/.egent/.temp/task-*",
-    ),
-)
-
-_DEVELOPER_SYSTEM_PROMPT = "你是开发工程师，负责根据描述开发代码"
-_REVIEWER_SYSTEM_PROMPT = "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
-
 
 class Workflow:
     """工作流：一整套开发工作。"""
@@ -74,33 +61,46 @@ class Workflow:
             self.__coding_submit_hook(success, report)
             return "已提交"
 
+        developer_system_prompt = (
+            "你是开发工程师，负责根据描述开发代码。"
+            + _MINIMUM_SCOPE_PRINCIPLE
+        )
+        editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(f"{_WORKING_DIRECTORY}/*",),
+            blacklist=(
+                f"{_WORKING_DIRECTORY}/.egent/.model.toml",
+                f"{_WORKING_DIRECTORY}/.egent/.temp/task-*",
+            ),
+        )
         self.__developer = egent.agent.Agent(
             name="Leo",
             settings="gpt5",
-            system_prompt=_DEVELOPER_SYSTEM_PROMPT,
+            system_prompt=developer_system_prompt,
             tools=(submit,),
         )
         self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
             readable=READABLE_RULE,
-            editable=EDITABLE_RULE,
+            editable=editable_rule,
         )
 
     async def start(self, description: str) -> str:
+        blue = "\033[34m"
+        reset = "\033[0m"
         Path(self.task_path).write_text(description, encoding="utf-8")
-        print(f"{BLUE}开始开发工作流{RESET}: {self.title}\n{description}")
+        print(f"{blue}开始开发工作流{reset}: {self.title}\n{description}")
         for _ in range(5):
-            print(f"{BLUE}开始编码{RESET}")
+            print(f"{blue}开始编码{reset}")
             success, message = await self.__coding()
             if not success:
-                print(f"{BLUE}编码打回{RESET},理由如下:\n{message}")
+                print(f"{blue}编码打回{reset},理由如下:\n{message}")
                 return message
-            print(f"{BLUE}开始审查{RESET}")
+            print(f"{blue}开始审查{reset}")
             passed, comment = await self.__review()
             if passed:
-                print(f"{BLUE}审查通过{RESET},简报如下:\n{message}")
+                print(f"{blue}审查通过{reset},简报如下:\n{message}")
                 return message
-            print(f"{BLUE}审查未通过{RESET},审查意见如下:\n{comment}")
+            print(f"{blue}审查未通过{reset},审查意见如下:\n{comment}")
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
@@ -169,16 +169,24 @@ class Workflow:
                 return "没有 diff（工作区干净，或没有可展示的变更）"
             return output
 
+        reviewer_system_prompt = (
+            "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
+            + _MINIMUM_SCOPE_PRINCIPLE
+        )
+        no_editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(),
+            blacklist=("*",),
+        )
         reviewer = egent.agent.Agent(
             name="Reviewer",
             settings="gpt5",
-            system_prompt=_REVIEWER_SYSTEM_PROMPT,
+            system_prompt=reviewer_system_prompt,
             tools=(submit, git_diff),
         )
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
             readable=READABLE_RULE,
-            editable=NO_EDITABLE_RULE,
+            editable=no_editable_rule,
         )
         for _ in range(5):
             submit_result = None
