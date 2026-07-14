@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
-from examples import conversation_printer
+import conversation_printer
 import work_order
 import egent.agent
 import egent.builtin_tools.path_validator
