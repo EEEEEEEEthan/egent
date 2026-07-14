@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import uuid
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 im
 
 import egent.agent
 import egent.builtin_tools.path_validator
+import egent.tool
 
 BLUE = "\033[34m"
 RESET = "\033[0m"
@@ -43,6 +45,9 @@ EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     ),
 )
 
+_DEVELOPER_SYSTEM_PROMPT = "你是开发工程师，负责根据描述开发代码"
+_REVIEWER_SYSTEM_PROMPT = "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
+
 
 class Workflow:
     """工作流：一整套开发工作。"""
@@ -55,18 +60,7 @@ class Workflow:
         task_id = uuid.uuid4().hex[:8]
         task_file = task_dir / f"task-{task_id}.txt"
         self.task_path = task_file.as_posix()
-        developer_name = "Leo"
-        self.__developer = egent.agent.Agent(
-            name=developer_name,
-            settings="gpt5",
-            system_prompt="你是开发工程师，负责根据描述开发代码",
-            tools=(),
-        )
-        self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
-            discoverable=DISCOVERABLE_RULE,
-            readable=READABLE_RULE,
-            editable=EDITABLE_RULE,
-        )
+        self.__developer: egent.agent.Agent | None = None
 
     async def start(self, description: str) -> str:
         Path(self.task_path).write_text(description, encoding="utf-8")
@@ -83,6 +77,7 @@ class Workflow:
                 print(f"{BLUE}审查通过{RESET},简报如下:\n{message}")
                 return message
             print(f"{BLUE}审查未通过{RESET},审查意见如下:\n{comment}")
+            assert self.__developer is not None
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
@@ -91,53 +86,95 @@ class Workflow:
 
     async def __coding(self) -> tuple[bool, str]:
         """根据描述执行开发工作并返回简报。"""
+        submit_result: tuple[bool, str] | None = None
+
+        @egent.tool.end_conversation
+        def submit(success: bool, report: str) -> str:
+            """提交开发结论并结束本轮对话。
+            @param success: True 表示开发完成，False 表示打回（无法完成或需求不明）
+            @param report: 完成简报，或打回理由
+            """
+            nonlocal submit_result
+            submit_result = (success, report)
+            return "已提交"
+
+        previous_developer = self.__developer
+        developer = egent.agent.Agent(
+            name="Leo",
+            settings="gpt5",
+            system_prompt=_DEVELOPER_SYSTEM_PROMPT,
+            tools=(submit,),
+        )
+        developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=DISCOVERABLE_RULE,
+            readable=READABLE_RULE,
+            editable=EDITABLE_RULE,
+        )
+        if previous_developer is not None:
+            developer._Agent__messages = copy.deepcopy(  # pylint: disable=protected-access
+                previous_developer._Agent__messages,  # pylint: disable=protected-access
+            )
+        self.__developer = developer
+
         for _ in range(5):
-            finish_marker = "<<<完成>>>"
-            reject_marker = "<<<打回>>>"
-            self.__developer.add_message(
+            submit_result = None
+            developer.add_message(
                 "user",
                 f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                f"如果开发完成，请先输出`{finish_marker}`并输出简报，例如`{finish_marker}\n简报`\n{finish_marker}必须在第一行的最开始\n"
-                f"如果你认为开发工作无法完成，或者需求不够明确，请输出`{reject_marker}`并输出简报，例如`{reject_marker}\n简报`\n{reject_marker}必须在第一行的最开始\n"
+                "开发完成后调用 submit(success=True, report=简报)；"
+                "若无法完成或需求不够明确，调用 submit(success=False, report=理由)。"
+                "必须通过 submit 提交结论。",
             )
-            result = (await self.__developer.send()).strip()
-            if result.startswith(finish_marker):
-                return True, f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
-            if result.startswith(reject_marker):
+            await developer.send()
+            if submit_result is not None:
+                success, report = submit_result
+                if success:
+                    return True, f'"{self.title}"开发工作完成,简报如下:\n{report}\n\n'
                 return False, (
-                    f'"{self.title}"开发工作被打回,理由如下:\n{result[len(reject_marker):].strip()}\n\n'
+                    f'"{self.title}"开发工作被打回,理由如下:\n{report}\n\n'
                     "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
                 )
-        return False, f'"{self.title}"开发工作因为无法预测的错误而失败了:\n{result}'
+        return False, f'"{self.title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
 
     async def __review(self) -> tuple[bool, str]:
         """审查开发成果，返回 (passed, comment)。"""
-        pass_marker = "<<<通过>>>"
-        fail_marker = "<<<打回>>>"
+        submit_result: tuple[bool, str] | None = None
+
+        @egent.tool.end_conversation
+        def submit(success: bool, report: str) -> str:
+            """提交审查结论并结束本轮对话。
+            @param success: True 表示审查通过，False 表示不通过
+            @param report: 通过说明，或不通过时的具体修改意见
+            """
+            nonlocal submit_result
+            submit_result = (success, report)
+            return "已提交"
+
         reviewer = egent.agent.Agent(
             name="Reviewer",
             settings="gpt5",
-            system_prompt="你是代码审查员，负责审查开发工程师的代码是否符合需求。",
-            tools=(),
+            system_prompt=_REVIEWER_SYSTEM_PROMPT,
+            tools=(submit,),
+        )
+        reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=DISCOVERABLE_RULE,
+            readable=READABLE_RULE,
+            editable=NO_EDITABLE_RULE,
         )
         for _ in range(5):
-            reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
-                discoverable=DISCOVERABLE_RULE,
-                readable=READABLE_RULE,
-                editable=NO_EDITABLE_RULE,
-            )
+            submit_result = None
             reviewer.add_message(
                 "user",
                 f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
-                f"如果审查通过，请输出`{pass_marker}`并输出简要说明，例如`{pass_marker}\n说明`\n{pass_marker}必须在第一行的最开始\n"
-                f"如果审查不通过，请输出三个尖括号包裹的`{fail_marker}`并输出具体意见，例如`{fail_marker}\n意见`\n{fail_marker}必须在第一行的最开始\n"
+                "审查通过时调用 submit(success=True, report=简要说明)；"
+                "不通过时调用 submit(success=False, report=具体意见)。"
+                "必须通过 submit 提交结论。",
             )
-            result = (await reviewer.send()).strip()
-            if result.startswith(pass_marker):
-                return True, result[len(pass_marker):].strip()
-            if result.startswith(fail_marker):
-                return False, result[len(fail_marker):].strip()
-        return False, f'"{self.title}"审查工作因为无法预测的错误而失败了:\n{result}'
+            await reviewer.send()
+            if submit_result is not None:
+                return submit_result
+        return False, f'"{self.title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
+
 
 async def begin_work_flow(
     leader: egent.agent.Agent,
