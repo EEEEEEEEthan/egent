@@ -61,7 +61,7 @@ class Studio:  # pylint: disable=too-few-public-methods
 
     def __init__(self) -> None:
         self.__agents: dict[str, egent.agent.Agent] = {}
-        self.__pending_private_chat_tasks: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
+        self.__pending_background_tasks: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
         def get_introduce(name: str) -> str:
             def role_line(role: str, description: str) -> str:
                 if name == role:
@@ -141,8 +141,8 @@ class Studio:  # pylint: disable=too-few-public-methods
         ethan_reply = await self.__agents["Ethan"].send_message("user", f"用户:\n{message}")
         if ethan_reply:
             Studio.__print_speech("Ethan", ethan_reply)
-        while self.__pending_private_chat_tasks:
-            await asyncio.gather(*self.__pending_private_chat_tasks)
+        while self.__pending_background_tasks:
+            await asyncio.gather(*self.__pending_background_tasks)
         return ethan_reply
 
     @egent.tool.end_conversation
@@ -165,7 +165,23 @@ class Studio:  # pylint: disable=too-few-public-methods
             ),
             switcher=coding_switcher,
         )
-        return await node_coding.begin(prompt, "")
+
+        async def run_develop_workflow() -> None:
+            ethan = self.__agents["Ethan"]
+            try:
+                result = await node_coding.begin(prompt, "")
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                result = f"[工作流异常] {error}"
+            await ethan.await_free()
+            ethan.add_message("user", f"[开发工作流完成]\n{result}")
+            follow_up = await ethan.send()
+            if follow_up:
+                Studio.__print_speech("Ethan", follow_up)
+
+        task = asyncio.create_task(run_develop_workflow())
+        self.__pending_background_tasks.add(task)
+        task.add_done_callback(self.__pending_background_tasks.discard)
+        return "开发工作流已启动，Leo 开发完成后会通知你。"
 
     async def await_free(self) -> None:
         """等待所有Agent空闲。"""
@@ -177,39 +193,29 @@ class Studio:  # pylint: disable=too-few-public-methods
         print(f"\033[31m{speaker}\033[0m:\n\033[37m{body}\033[0m")
 
     def __get_private_chat_tool(self, from_name: str) -> egent.tool.ToolCallable:
-        @egent.tool.end_conversation
         async def private_chat_tool(to_name: str, prompt: str) -> str:
             """和指定角色私聊.对方会回复你.但是你不能通过这个工具委派编辑工作.编辑工作需要走正式的编辑流程.
             @param to_name: 私聊对象
             @param prompt: 消息内容
-            @return: 发送确认
+            @return: 对方回复
             """
             if from_name == to_name:
                 raise ValueError(f"不能对自己说话：{from_name}")
-            from_agent = self.__agents[from_name]
             target_agent = self.__agents.get(to_name)
             if target_agent is None:
                 raise ValueError(f"未知角色：{to_name}")
             Studio.__print_speech(f"{from_name}->{to_name}", prompt)
-
-            async def dispatch_private_chat() -> None:
-                permissions = target_agent.path_permissions
-                try:
-                    target_agent.path_permissions = permissions.readonly_copy
-                    result = await target_agent.send_message(
-                        "user",
-                        f"[私聊]{from_name}对你说:\n{prompt}",
-                    )
-                except Exception as error:  # pylint: disable=broad-exception-caught
-                    result = f"[发送失败] {error}"
-                finally:
-                    target_agent.path_permissions = permissions
-                Studio.__print_speech(f"{to_name}->{from_name}", result)
-                from_agent.add_message("user", f"[私聊]{to_name}回复:\n{result}")
-                Studio.__print_speech(from_name, await from_agent.send())
-
-            task = asyncio.create_task(dispatch_private_chat())
-            self.__pending_private_chat_tasks.add(task)
-            task.add_done_callback(self.__pending_private_chat_tasks.discard)
-            return "message sent."
+            permissions = target_agent.path_permissions
+            try:
+                target_agent.path_permissions = permissions.readonly_copy
+                result = await target_agent.send_message(
+                    "user",
+                    f"[私聊]{from_name}对你说:\n{prompt}",
+                )
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                result = f"[发送失败] {error}"
+            finally:
+                target_agent.path_permissions = permissions
+            Studio.__print_speech(f"{to_name}->{from_name}", result)
+            return f"[私聊]{to_name}回复:\n{result}"
         return private_chat_tool
