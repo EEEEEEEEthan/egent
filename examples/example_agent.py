@@ -76,12 +76,14 @@ async def async_main() -> int:
         for _ in range(5):
             developer.add_message("user", reminder)
             result = (await developer.send()).strip()
-            if result.startswith("<<<完成>>>"):
-                result = f'"{title}"开发工作完成,简报如下:\n{result[len("<<<完成>>>"):].strip()}\n\n'
+            finish_marker = "<<<完成>>>"
+            reject_marker = "<<<打回>>>"    
+            if result.startswith(finish_marker):
+                result = f'"{title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
                 break
-            if result.startswith("<<<打回>>>"):
+            if result.startswith(reject_marker):
                 result = (
-                    f'"{title}"开发工作被打回,理由如下:\n{result[len("<<<打回>>>"):].strip()}\n\n'
+                    f'"{title}"开发工作被打回,理由如下:\n{result[len(reject_marker):].strip()}\n\n'
                     "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
                 )
                 break
