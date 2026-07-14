@@ -109,7 +109,10 @@ class Studio:  # pylint: disable=too-few-public-methods
                 "用户是资深程序员,沟通时不需要解释太多\n"
             ,
             skills=(),
-            tools=(self.__get_speak_tool("Leo"),),
+            tools=(
+                self.__get_speak_tool("Leo"),
+                self.__begin_develop_workflow
+            ),
         )
         self.__agents["Leo"].path_permissions = (
             egent.builtin_tools.path_validator.PathPermissions(
@@ -129,7 +132,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             await asyncio.gather(*self.__pending_speak_tasks)
         return ethan_reply
 
-    async def begin_develop_workflow(self, prompt: str) -> str:
+    async def __begin_develop_workflow(self, prompt: str) -> str:
         """开始开发工作流.
         @param prompt: 开发需求.请务必精准,措辞简练
         @return: 开发工作流结果
