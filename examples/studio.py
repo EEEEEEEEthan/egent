@@ -5,22 +5,9 @@ import subprocess
 from pathlib import Path
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
 import conversation_printer
-import work_order
 import egent.agent
 import egent.builtin_tools.path_validator
 import egent.tool
-
-_WORKFLOW_DONE_MARKER = "<<<完成>>>"
-_WORKFLOW_ABORT_MARKER = "<<<放弃>>>"
-
-
-def _coding_workflow_switcher(
-    result: str,
-) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
-    if result.startswith(_WORKFLOW_DONE_MARKER) or result.startswith(_WORKFLOW_ABORT_MARKER):
-        return None, result
-    return None, None
-
 
 class Studio:  # pylint: disable=too-few-public-methods
     """同一对话空间内的 Agent 集合；成员通过私聊工具一对一对话。"""
@@ -155,60 +142,23 @@ class Studio:  # pylint: disable=too-few-public-methods
         """
         print("\033[34mbegin_develop_workflow\033[0m")
         print(prompt)
-        def coding_switcher(
-            result: str,
-        ) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
-            if result.strip().startswith("<<<完成>>>") or result.strip().startswith("<<<放弃>>>"):
-                return None, result
-            return None, None
-
-        def coding_validator(result: str) -> str | None:
-            project_root = Path(__file__).resolve().parent.parent
-            try:
-                proc = subprocess.run(
-                    ["pytest", "tests/", "-q", "--tb=short"],
-                    cwd=project_root,
-                    capture_output=True,
-                    timeout=120,
-                    text=True,
-                )
-            except subprocess.TimeoutExpired:
-                return "回归测试超时 (120秒)"
-            except FileNotFoundError:
-                return "回归测试失败: 找不到 pytest 命令"
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                return f"回归测试异常: {exc}"
-            if proc.returncode == 0:
-                return None
-            output = (proc.stdout + proc.stderr)[-2000:]
-            return f"回归测试不通过 (exit code {proc.returncode}):\n{output}"
-
-        node_coding = work_order.WorkOrderNode(
-            name="开发",
-            agent=self.__agents["Leo"],
-            submit_notification=(
-                "工作完毕后回复:先用三个尖括号包裹的`完成`或者`放弃`,然后说明理由,例如`<<<放弃>>>我没有权限编辑`"
-            ),
-            switcher=coding_switcher,
-            validator=coding_validator,
+        leo = self.__agents["Leo"]
+        await leo.await_free()
+        leo.add_message("user", f"原始需求:\n{prompt}")
+        notification = (
+            "完成开发后输出三个尖括号包裹的`完成`,并输出简报，例如`<<<完成>>>\n简报内容`\n"
+            "如果认为开发任务无法完成，就输出三个尖括号包裹的`放弃`,并输出放弃原因，例如`<<<放弃>>>\n放弃原因`\n"
         )
-
-        async def run_develop_workflow() -> None:
-            ethan = self.__agents["Ethan"]
-            try:
-                result = await node_coding.begin(prompt, "")
-            except Exception as error:  # pylint: disable=broad-exception-caught
-                result = f"[工作流异常] {error}"
-            await ethan.await_free()
-            ethan.add_message("user", f"[开发工作流完成]\n{result}")
-            follow_up = await ethan.send()
-            if follow_up:
-                Studio.__print_speech("Ethan", follow_up)
-
-        task = asyncio.create_task(run_develop_workflow())
-        self.__pending_background_tasks.add(task)
-        task.add_done_callback(self.__pending_background_tasks.discard)
-        return "开发工作流已启动，Leo 开发完成后会通知你。"
+        finish_marker = "<<<完成>>>"
+        abort_marker = "<<<放弃>>>"
+        for _ in range(5):
+            leo.add_message("system", notification)
+            result = await leo.send()
+            if result.strip().startswith(finish_marker):
+                return f"开发任务完成。以下是简报:\n{result[result.find(finish_marker) + len(finish_marker):]}"
+            if result.strip().startswith(abort_marker):
+                return f"开发任务无法完成。以下是简报:\n{result[result.find(abort_marker) + len(abort_marker):]}"
+        return "开发任务因为未知原因无法完成。"
 
     async def await_free(self) -> None:
         """等待所有Agent空闲。"""
