@@ -56,7 +56,9 @@ async def async_main() -> int:
             @param prompt: 说话内容
             @return: 回复内容
             """
-            targets = set(to_names)
+            if from_name in to_names:
+                raise ValueError(f"不能对自己说话：{from_name}")
+            targets = set[str](to_names)
             target_label = ", ".join(to_names)
             print(f"{from_name}->{target_label}:\n{prompt}")
             for agent in agents.values():
