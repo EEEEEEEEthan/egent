@@ -148,10 +148,13 @@ class Studio:  # pylint: disable=too-few-public-methods
                         agent.add_message("user", f"{name}回复{from_name}:\n{result}")
             async def dispatch_speak_round() -> None:
                 async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
+                    permissions = target_agent.path_permissions
                     try:
                         result = await target_agent.send()
                     except Exception as error:  # pylint: disable=broad-exception-caught
                         result = f"[发送失败] {error}"
+                    finally:
+                        target_agent.path_permissions = permissions
                     on_target_replied(target_agent.name, result)
                 target_agents = [
                     agent for agent in self.__agents.values()
