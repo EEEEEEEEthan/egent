@@ -31,6 +31,10 @@ READABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     whitelist=("*",),
     blacklist=(f"{_WORKING_DIRECTORY}/.egent/.model.toml",),
 )
+NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=(),
+    blacklist=("*",),
+)
 _MINIMUM_SCOPE_PRINCIPLE = (
     "【最小域原则】定义一个变量，应放在最小域中——只有某个方法调用就定义在方法里；"
     "只有某个分支调用就放在该分支里。需要缓存的另论：类实例缓存放实例成员，"
@@ -174,10 +178,6 @@ class Workflow:
             "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
             + _MINIMUM_SCOPE_PRINCIPLE
         )
-        no_editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=(),
-            blacklist=("*",),
-        )
         reviewer = egent.agent.Agent(
             name="Reviewer",
             settings="gpt5",
@@ -187,7 +187,7 @@ class Workflow:
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
             readable=READABLE_RULE,
-            editable=no_editable_rule,
+            editable=NO_EDITABLE_RULE,
         )
         for _ in range(5):
             submit_result = None
