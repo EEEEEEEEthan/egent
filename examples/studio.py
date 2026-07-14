@@ -12,7 +12,7 @@ import egent.builtin_tools.path_validator
 import egent.tool
 
 
-class Studio:
+class Studio:  # pylint: disable=too-few-public-methods
     """同一对话空间内的 Agent 集合；成员通过 speak 工具互相对话。"""
 
     _WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
@@ -48,14 +48,15 @@ class Studio:
                 "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多\n"
             ,
             skills=(),
-            tools=(self.get_speak_tool("ethan"),),
+            tools=(self._get_speak_tool("ethan"),),
             path_permissions=egent.builtin_tools.path_validator.PathPermissions(
                 discoverable=Studio._DISCOVERABLE_RULE,
                 readable=Studio._READABLE_RULE,
                 editable=Studio._NO_EDITABLE_RULE,
             ),
         )
-        self.add(ethan)
+        self._ethan = ethan
+        self._agents[ethan.name] = ethan
 
         milo = egent.agent.Agent(
             name="milo",
@@ -64,31 +65,20 @@ class Studio:
                 "你是milo，是ethan的助理。ethan是这个项目的主程\n"
             ,
             skills=(),
-            tools=(self.get_speak_tool("milo"),),
+            tools=(self._get_speak_tool("milo"),),
             path_permissions=egent.builtin_tools.path_validator.PathPermissions(
                 discoverable=Studio._DISCOVERABLE_RULE,
                 readable=Studio._READABLE_RULE,
                 editable=Studio._NO_EDITABLE_RULE,
             ),
         )
-        self.add(milo)
+        self._agents[milo.name] = milo
 
     @staticmethod
-    def print_speech(speaker: str, body: str) -> None:
-        """打印角色发言。"""
+    def _print_speech(speaker: str, body: str) -> None:
         print(f"\033[31m{speaker}\033[0m:\n\033[37m{body}\033[0m")
 
-    @property
-    def agents(self) -> dict[str, egent.agent.Agent]:
-        """成员表。"""
-        return self._agents
-
-    def add(self, agent: egent.agent.Agent) -> None:
-        """注册成员。"""
-        self._agents[agent.name] = agent
-
-    def get_speak_tool(self, from_name: str) -> egent.tool.ToolCallable:
-        """生成指定成员的 speak 工具。"""
+    def _get_speak_tool(self, from_name: str) -> egent.tool.ToolCallable:
         @egent.tool.end_conversation
         async def speak_tool(to_names: list[str], prompt: str) -> str:
             """对指定角色说话；回复通过回调异步送达，不阻塞本工具返回
@@ -101,7 +91,7 @@ class Studio:
             from_agent = self._agents.get(from_name)
             targets = set[str](to_names)
             target_label = ", ".join(to_names)
-            Studio.print_speech(f"{from_name}->{target_label}", prompt)
+            Studio._print_speech(f"{from_name}->{target_label}", prompt)
             for agent in self._agents.values():
                 if agent.name in targets:
                     agent.add_message("user", f"{from_name}对你说:\n{prompt}")
@@ -109,7 +99,7 @@ class Studio:
                     agent.add_message("user", f"{from_name}对{target_label}说:\n{prompt}")
 
             def on_target_replied(name: str, result: str) -> None:
-                Studio.print_speech(f"{name}->{from_name}", result)
+                Studio._print_speech(f"{name}->{from_name}", result)
                 from_agent.add_message("user", f"{name}回复:\n{result}")
                 for agent in self._agents.values():
                     if agent.name not in targets and agent.name != from_name:
@@ -130,7 +120,7 @@ class Studio:
                 await asyncio.gather(
                     *(dispatch_target_reply(agent) for agent in target_agents)
                 )
-                Studio.print_speech(from_name, await from_agent.send())
+                Studio._print_speech(from_name, await from_agent.send())
 
             if any(agent.name in targets for agent in self._agents.values()):
                 task = asyncio.create_task(dispatch_speak_round())
@@ -140,7 +130,12 @@ class Studio:
 
         return speak_tool
 
-    async def await_idle(self) -> None:
-        """等待所有 speak 异步回合结束。"""
+    async def send(self, message: str) -> str:
+        """向主程发送用户消息，等待本轮群聊结束并返回其回复。"""
+        self._ethan.add_message("user", f"用户:\n{message}")
+        ethan_reply = await self._ethan.send()
+        if ethan_reply:
+            Studio._print_speech("ethan", ethan_reply)
         while self._pending_speak_tasks:
             await asyncio.gather(*self._pending_speak_tasks)
+        return ethan_reply
