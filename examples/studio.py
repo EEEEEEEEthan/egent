@@ -123,7 +123,7 @@ class Studio:  # pylint: disable=too-few-public-methods
     def __get_speak_tool(self, from_name: str) -> egent.tool.ToolCallable:
         @egent.tool.end_conversation
         async def speak_tool(to_names: list[str], prompt: str) -> str:
-            """和指定角色说话.他或者他们会回复你.但是你不能通过这个工具委派工作.委派工作需要走正式的工作流程.
+            """和指定角色说话.他或者他们会回复你.但是你不能通过这个工具委派编辑工作.编辑工作需要走正式的编辑流程.
             @param to_names: 说话对象（可多个）
             @param prompt: 说话内容
             @return: 发送确认
