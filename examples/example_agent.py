@@ -73,7 +73,7 @@ async def async_main() -> int:
             "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
             "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
         )
-        async def send():
+        async def send() -> None:
             result = ""
             for _ in range(5):
                 developer.add_message("user", reminder)
@@ -90,10 +90,11 @@ async def async_main() -> int:
             else:
                 result = f'"{title}"开发工作因为无法预测的错误而失败了'
             print(result)
-            await leader.await_free
-            await leader.add_message("user", result)
+            await leader.await_free()
+            leader.add_message("user", result)
             await leader.send()
-        send()
+
+        asyncio.create_task(send())
         return f'"{title}"开始开发，请耐心等待'
 
     leader = egent.agent.Agent(
