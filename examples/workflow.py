@@ -52,7 +52,6 @@ class Workflow:
         task_id = uuid.uuid4().hex[:8]
         task_file = task_dir / f"task-{task_id}.txt"
         self.task_path = task_file.as_posix()
-        self.log_path = task_dir / f"task-{task_id}.log"
         developer_name = "Leo"
         self.__developer = egent.agent.Agent(
             name=developer_name,
