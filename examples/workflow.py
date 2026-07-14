@@ -129,7 +129,7 @@ class Workflow:
             reviewer.add_message(
                 "user",
                 f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
-                f"如果审查通过，请输出`{pass_marker}`并输出简要说明，例如`{pass_marker}\n说明`\n"
+                f"如果审查通过，请输出`{pass_marker}`并输出简要说明，例如`{pass_marker}\n说明`\n{pass_marker}必须在第一行的最开始\n"
                 f"如果审查不通过，请输出三个尖括号包裹的`{fail_marker}`并输出具体意见，例如`{fail_marker}\n意见`\n{fail_marker}必须在第一行的最开始\n"
             )
             result = (await reviewer.send()).strip()
