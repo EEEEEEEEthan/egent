@@ -48,10 +48,13 @@ _EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
 )
 
 
-async def async_main() -> int:
-    """运行交互式聊天，返回进程退出码。"""
-    leader: egent.agent.Agent
-    async def _delegate_development_work(title: str, description: str) -> str:
+class Studio:
+    """工作室，管理主程 agent 和开发工作委派。"""
+
+    def __init__(self) -> None:
+        self.leader: egent.agent.Agent
+
+    async def _delegate_development_work(self, title: str, description: str) -> str:
         """委派开发工作
         @title: 开发工作标题,几个单词即可
         @description: 开发工作描述,务必精准且简练
@@ -106,32 +109,34 @@ async def async_main() -> int:
         print(result)
         return result
 
-    leader = egent.agent.Agent(
-        name="ethan",
-        settings="gpt5",
-        system_prompt=(
-            "你是ethan，你是这个项目的主程\n"
-            "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
-        ),
-        tools=(_delegate_development_work,),
-    )
-    leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
-        discoverable=_DISCOVERABLE_RULE,
-        readable=_READABLE_RULE,
-        editable=_NO_EDITABLE_RULE,
-    )
-    conversation_printer.ConversationPrinter(leader)
-    while True:
-        try:
-            user_input = input(">>> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-        if not user_input:
-            continue
-        leader.add_message("user", user_input)
-        await leader.send()
+    async def run(self) -> int:
+        """运行交互式聊天，返回进程退出码。"""
+        self.leader = egent.agent.Agent(
+            name="ethan",
+            settings="gpt5",
+            system_prompt=(
+                "你是ethan，你是这个项目的主程\n"
+                "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
+            ),
+            tools=(self._delegate_development_work,),
+        )
+        self.leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=_DISCOVERABLE_RULE,
+            readable=_READABLE_RULE,
+            editable=_NO_EDITABLE_RULE,
+        )
+        conversation_printer.ConversationPrinter(self.leader)
+        while True:
+            try:
+                user_input = input(">>> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return 0
+            if not user_input:
+                continue
+            self.leader.add_message("user", user_input)
+            await self.leader.send()
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(async_main()))
+    raise SystemExit(asyncio.run(Studio().run()))
