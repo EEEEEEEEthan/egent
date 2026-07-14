@@ -94,7 +94,7 @@ async def async_main() -> int:
             await leader.add_message("user", result)
             await leader.send()
         send()
-        return f"已委派开发工作给{developer_name}"
+        return f'"{title}"开始开发，请耐心等待'
 
     leader = egent.agent.Agent(
         name="ethan",
