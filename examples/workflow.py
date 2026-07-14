@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -152,11 +153,27 @@ class Workflow:
             submit_result = (success, report)
             return "已提交"
 
+        def git_diff(staged: bool = False, cached: bool = False) -> str:
+            """查看代码变更 diff。
+            @param staged: True 查看已暂存到 index 的变更（git diff --staged）
+            @param cached: True 查看工作区相对 HEAD 的全部变更（git diff HEAD）。与 staged 互斥，cached 优先。
+            """
+            args = ["git", "diff"]
+            if cached:
+                args.append("HEAD")
+            elif staged:
+                args.append("--staged")
+            result = subprocess.run(args, capture_output=True, text=True, cwd=Path.cwd())
+            output = result.stdout.strip()
+            if not output:
+                return "没有 diff（工作区干净，或没有可展示的变更）"
+            return output
+
         reviewer = egent.agent.Agent(
             name="Reviewer",
             settings="gpt5",
             system_prompt=_REVIEWER_SYSTEM_PROMPT,
-            tools=(submit,),
+            tools=(submit, git_diff),
         )
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
