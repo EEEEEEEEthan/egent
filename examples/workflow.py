@@ -1,0 +1,112 @@
+"""开发工作流。"""
+
+from __future__ import annotations
+
+import uuid
+from pathlib import Path
+
+import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
+
+import egent.agent
+import egent.builtin_tools.path_validator
+
+_WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
+DISCOVERABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=("*",),
+    blacklist=(
+        f"{_WORKING_DIRECTORY}/.git",
+        f"{_WORKING_DIRECTORY}/.git/*",
+        f"{_WORKING_DIRECTORY}/**/__pycache__",
+        f"{_WORKING_DIRECTORY}/**/__pycache__/*",
+        f"{_WORKING_DIRECTORY}/**/.pytest_cache",
+        f"{_WORKING_DIRECTORY}/**/.pytest_cache/*",
+        f"{_WORKING_DIRECTORY}/**/.ruff_cache",
+        f"{_WORKING_DIRECTORY}/**/.ruff_cache/*",
+    ),
+)
+READABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=("*",),
+    blacklist=(f"{_WORKING_DIRECTORY}/.egent/.model.toml",),
+)
+NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=(),
+    blacklist=("*",),
+)
+EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+    whitelist=(f"{_WORKING_DIRECTORY}/*",),
+    blacklist=(
+        f"{_WORKING_DIRECTORY}/.egent/.model.toml",
+        f"{_WORKING_DIRECTORY}/.egent/.temp/task-*",
+    ),
+)
+
+
+class Workflow:
+    """工作流：一整套开发工作。"""
+
+    def __init__(self, leader: egent.agent.Agent, title: str) -> None:
+        self.leader = leader
+        self.title = title
+
+    async def start(self, description: str) -> str:
+        """根据描述执行开发工作并返回简报。"""
+        developer_name = "Leo"
+        print("委派开发工作")
+
+        task_dir = Path(".egent/.temp")
+        task_dir.mkdir(parents=True, exist_ok=True)
+        task_id = uuid.uuid4().hex[:8]
+        task_file = task_dir / f"task-{task_id}.txt"
+        task_file.write_text(description, encoding="utf-8")
+        task_path = task_file.as_posix()
+
+        developer = egent.agent.Agent(
+            name=developer_name,
+            settings="gpt5",
+            system_prompt="你是开发工程师，负责根据描述开发代码",
+            tools=(),
+        )
+        developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=DISCOVERABLE_RULE,
+            readable=READABLE_RULE,
+            editable=EDITABLE_RULE,
+        )
+        developer.add_message(
+            "user",
+            f"需求文件在 {task_path}，请读取后开始开发。注意：你无权编辑该需求文件。",
+        )
+        reminder = (
+            "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
+            "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
+        )
+        result = ""
+        for _ in range(5):
+            developer.add_message("user", reminder)
+            result = (await developer.send()).strip()
+            finish_marker = "<<<完成>>>"
+            reject_marker = "<<<打回>>>"
+            if result.startswith(finish_marker):
+                result = f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
+                break
+            if result.startswith(reject_marker):
+                result = (
+                    f'"{self.title}"开发工作被打回,理由如下:\n{result[len(reject_marker):].strip()}\n\n'
+                    "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
+                )
+                break
+        else:
+            result = f'"{self.title}"开发工作因为无法预测的错误而失败了'
+        print(result)
+        return result
+
+
+async def begin_work_flow(
+    leader: egent.agent.Agent,
+    title: str,
+    description: str,
+) -> str:
+    """启动工作流
+    @param title: 工作流标题,几个单词即可
+    @param description: 工作流描述,务必精准且简练
+    """
+    return await Workflow(leader, title).start(description)
