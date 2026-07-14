@@ -53,14 +53,12 @@ async def async_main() -> int:
             @param prompt: 说话内容
             @return: 回复内容
             """
-            return "已传达。请耐心等待。回复`1`即可。"
             print(f"{from_name}->{to_name}:\n{prompt}")
             result = ""
             for agent in agents.values():
                 if agent.name == to_name:
                     agent.add_message("system", f"{from_name}对你说:\n{prompt}")
-                    await agent.send()
-                    result = agent.last_message
+                    result = await agent.send()
                 elif agent.name != from_name:
                     agent.add_message("system", f"{from_name}对{agent.name}说:\n{prompt}")
             print(f"{to_name}->{from_name}:\n{result}")

@@ -164,12 +164,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         cloned.__dict__.update(state)
         return cloned
 
-    @property
-    def last_message(self) -> str:
-        """返回最后一条消息的 content 文本。"""
-        content = self.__messages[-1].get("content")
-        return content if isinstance(content, str) else ""
-
     def add_listener(self, listener: Callable[[AgentEvent], None]) -> None:
         """注册流式事件监听器。"""
         self.__event_listeners.append(listener)
@@ -206,7 +200,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             )
         return self.__add_message(role, content, **extra)
 
-    async def send(self) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    async def send(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         while True:
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
@@ -216,7 +210,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             if not tool_calls:
                 self.__add_message("assistant", reply_text)
                 self.__emit_event(TurnCompleted(reply_text))
-                return
+                return reply_text
             self.__add_message(
                 "assistant",
                 reply_text,
