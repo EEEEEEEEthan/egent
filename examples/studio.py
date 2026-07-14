@@ -131,11 +131,13 @@ class Studio:  # pylint: disable=too-few-public-methods
         await self.await_free()
         return await self.__agents["Ethan"].send_message("user", f"用户:\n{message}")
 
+    @egent.tool.end_conversation
     async def __begin_develop_workflow(self, prompt: str) -> str:
         """开始开发工作流.
         @param prompt: 开发需求.请务必精准,措辞简练
         @return: 开发工作流结果
         """
+        # coding
         def coding_switcher(
             result: str,
         ) -> tuple[work_order.WorkOrderNode | None, work_order.HandoffMessage]:
