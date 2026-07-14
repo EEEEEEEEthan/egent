@@ -99,11 +99,23 @@ class Workflow:
         Path(self.task_path).write_text(description, encoding="utf-8")
         print(f"{blue}开始开发工作流{reset}: {self.title}\n{description}")
         for _ in range(5):
-            print(f"{blue}开始编码{reset}")
-            success, message = await self.__coding()
-            if not success:
-                print(f"{blue}编码打回{reset},理由如下:\n{message}")
-                return message
+            for _ in range(5):
+                print(f"{blue}开始编码{reset}")
+                success, message = await self.__coding()
+                if not success:
+                    print(f"{blue}编码打回{reset},理由如下:\n{message}")
+                    return message
+                print(f"{blue}开始回归测试{reset}")
+                reg_passed, reg_output = self.__regression_test()
+                if reg_passed:
+                    break
+                print(f"{blue}回归测试未通过{reset}")
+                self.__developer.add_message(
+                    "user",
+                    f"回归测试未通过，请修复：\n{reg_output}",
+                )
+            else:
+                return f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
             print(f"{blue}开始审查{reset}")
             passed, comment = await self.__review()
             if passed:
@@ -147,6 +159,19 @@ class Workflow:
             return False, f'"{self.title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
         finally:
             self.__coding_submit_hook = None
+
+    def __regression_test(self) -> tuple[bool, str]:
+        """跑 pytest 全量回归测试，返回 (passed, output)。"""
+        result = subprocess.run(
+            ["pytest"],
+            capture_output=True,
+            text=True,
+            cwd=Path.cwd(),
+        )
+        if result.returncode != 0:
+            output = (result.stdout + "\n" + result.stderr).strip()
+            return False, output
+        return True, ""
 
     async def __review(self) -> tuple[bool, str]:
         """审查开发成果，返回 (passed, comment)。"""
