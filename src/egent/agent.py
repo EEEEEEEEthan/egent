@@ -132,7 +132,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__file_system_tool_set = egent.builtin_tools.file_system_tools.FileSystemToolSet()
         self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions()
         self.__file_system_tool_set.path_permissions = self.__path_permissions
-        self.__path_permissions_text = str(self.__path_permissions)
+        self.__path_permissions_text = self.__path_permissions.format_rules()
         self.__messages: list[ChatMessage] = []
         self.__is_busy = False
         self.__busy_condition = asyncio.Condition()
@@ -332,7 +332,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         return summary
 
     def __sync_path_permissions_notice(self) -> None:
-        current_text = str(self.path_permissions)
+        current_text = self.path_permissions.format_rules()
         if current_text == self.__path_permissions_text:
             return
         self.__path_permissions_text = current_text

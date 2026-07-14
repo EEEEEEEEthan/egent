@@ -80,9 +80,6 @@ class PathPermissions:
     readable: PathPermissionRule = PathPermissionRule()
     editable: PathPermissionRule = PathPermissionRule()
 
-    def __str__(self) -> str:
-        return self.format_rules()
-
     def is_discoverable(self, path: Path) -> bool:
         """路径是否允许被遍历发现。"""
         return self.discoverable.allows(path)
