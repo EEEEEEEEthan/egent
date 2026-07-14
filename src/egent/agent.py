@@ -123,6 +123,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             tools: 自定义工具列表，构造后固定不变。
         """
         self.name = name
+        self.__settings = settings
+        self.__system_prompt = system_prompt
+        self.__skills = tuple(skills)
+        self.__tools = tuple(tools)
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
             api_key=model_settings.api_key,
@@ -168,16 +172,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             self.__add_message("system", "\n\n".join(system_sections))
 
     def __copy__(self) -> Agent:
-        cloned = Agent.__new__(Agent)
-        state = self.__dict__.copy()
-        for key, value in state.items():
-            if key.endswith("__messages"):
-                state[key] = deepcopy(value)
-            elif key.endswith("__event_listeners"):
-                state[key] = []
-            elif key.endswith("__busy_condition"):
-                state[key] = asyncio.Condition()
-        cloned.__dict__.update(state)
+        cloned = Agent(
+            settings=self.__settings,
+            name=self.name,
+            system_prompt=self.__system_prompt,
+            skills=self.__skills,
+            tools=self.__tools,
+        )
+        cloned.__messages = deepcopy(self.__messages)
+        cloned.path_permissions = self.path_permissions
+        cloned._Agent__path_permissions_text = self._Agent__path_permissions_text  # pylint: disable=protected-access
         return cloned
 
     def add_listener(self, listener: Callable[[AgentEvent], None]) -> None:

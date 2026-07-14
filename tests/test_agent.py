@@ -19,7 +19,7 @@ import egent.tool
 
 
 def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
-    """clone 应共享模型配置与技能工具，深拷贝消息，不复制事件监听器。"""
+    """clone 应用相同构造参数重建，深拷贝消息，不复制事件监听器。"""
     monkeypatch.setattr(
         "egent.model_settings.ModelSettings.load",
         lambda _profile: SimpleNamespace(
@@ -37,13 +37,7 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
 
     assert reviewer is not leader
     assert reviewer.model == leader.model
-    assert reviewer._Agent__client is leader._Agent__client
-    assert reviewer._Agent__api_tools is leader._Agent__api_tools
-    assert reviewer._Agent__tool_handlers is leader._Agent__tool_handlers
-    assert (
-        reviewer._Agent__conversation_terminating_tool_names
-        is leader._Agent__conversation_terminating_tool_names
-    )
+    assert reviewer._Agent__settings == leader._Agent__settings
     assert reviewer.path_permissions is leader.path_permissions
     assert reviewer._Agent__messages == leader._Agent__messages
     assert reviewer._Agent__messages is not leader._Agent__messages
