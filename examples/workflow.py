@@ -76,7 +76,6 @@ class Workflow:
     
     async def __coding(self) -> tuple[bool, str]:
         """根据描述执行开发工作并返回简报。"""
-        result = ""
         for _ in range(5):
             self.__developer.add_message(
                 "user",
@@ -86,6 +85,7 @@ class Workflow:
             )
             finish_marker = "<<<完成>>>"
             reject_marker = "<<<打回>>>"
+            result = await self.__developer.send()
             if result.startswith(finish_marker):
                 return True, f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
             if result.startswith(reject_marker):
