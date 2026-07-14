@@ -45,6 +45,14 @@ _NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
     blacklist=("*",),
 )
 
+_RESET = "\033[0m"
+_RED = "\033[31m"
+_WHITE = "\033[37m"
+
+
+def _print_speech(speaker: str, body: str) -> None:
+    print(f"{_RED}{speaker}{_RESET}:\n{_WHITE}{body}{_RESET}")
+
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     agents: dict[str, egent.agent.Agent] = {}
@@ -60,7 +68,7 @@ async def async_main() -> int:
                 raise ValueError(f"不能对自己说话：{from_name}")
             targets = set[str](to_names)
             target_label = ", ".join(to_names)
-            print(f"{from_name}->{target_label}:\n{prompt}")
+            _print_speech(f"{from_name}->{target_label}", prompt)
             for agent in agents.values():
                 if agent.name in targets:
                     agent.add_message("system", f"{from_name}对你说:\n{prompt}")
@@ -71,7 +79,7 @@ async def async_main() -> int:
                 if agent.name in targets:
                     results[agent.name] = await agent.send()
             for name, result in results.items():
-                print(f"{name}->{from_name}:\n{result}")
+                _print_speech(f"{name}->{from_name}", result)
             for agent in agents.values():
                 if agent.name not in targets and agent.name != from_name:
                     for name, result in results.items():
@@ -111,11 +119,11 @@ async def async_main() -> int:
         ),
     )
     agents[milo.name] = milo
-    conversation_printer.ConversationPrinter(ethan)
-    conversation_printer.ConversationPrinter(milo, 1)
+    #conversation_printer.ConversationPrinter(ethan)
+    #conversation_printer.ConversationPrinter(milo, 1)
     while True:
         ethan.add_message("user", input(">>> ").strip())
-        print(f"ethan: \n{await ethan.send()}")
+        _print_speech("ethan", await ethan.send())
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(async_main()))
