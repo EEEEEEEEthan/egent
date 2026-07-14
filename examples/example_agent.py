@@ -56,7 +56,7 @@ def _print_speech(speaker: str, body: str) -> None:
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     agents: dict[str, egent.agent.Agent] = {}
-    pending_speak_tasks: set[asyncio.Task[None]] = set()
+    pending_speak_tasks: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
 
     def get_speak_tool(from_name: str):
         @egent.tool.end_conversation
