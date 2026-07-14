@@ -56,13 +56,15 @@ def _print_speech(speaker: str, body: str) -> None:
 async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     agents: dict[str, egent.agent.Agent] = {}
+    pending_speak_tasks: set[asyncio.Task[None]] = set()
+
     def get_speak_tool(from_name: str):
         @egent.tool.end_conversation
         async def speak_tool(to_names: list[str], prompt: str) -> str:
-            """对指定角色说话，并得到回复
+            """对指定角色说话；回复通过回调异步送达，不阻塞本工具返回
             @param to_names: 说话对象（可多个）
             @param prompt: 说话内容
-            @return: 回复内容
+            @return: 发送确认
             """
             if from_name in to_names:
                 raise ValueError(f"不能对自己说话：{from_name}")
@@ -74,17 +76,29 @@ async def async_main() -> int:
                     agent.add_message("system", f"{from_name}对你说:\n{prompt}")
                 elif agent.name != from_name:
                     agent.add_message("system", f"{from_name}对{target_label}说:\n{prompt}")
-            results: dict[str, str] = {}
+
+            def on_target_replied(name: str, result: str) -> None:
+                _print_speech(f"{name}->{from_name}", result)
+                from_agent = agents.get(from_name)
+                if from_agent is not None:
+                    from_agent.add_message("system", f"{name}回复:\n{result}")
+                for agent in agents.values():
+                    if agent.name not in targets and agent.name != from_name:
+                        agent.add_message("system", f"{name}回复{from_name}:\n{result}")
+
+            async def dispatch_target_reply(target_agent: egent.agent.Agent) -> None:
+                try:
+                    result = await target_agent.send()
+                except Exception as error:  # pylint: disable=broad-exception-caught
+                    result = f"[发送失败] {error}"
+                on_target_replied(target_agent.name, result)
+
             for agent in agents.values():
                 if agent.name in targets:
-                    results[agent.name] = await agent.send()
-            for name, result in results.items():
-                _print_speech(f"{name}->{from_name}", result)
-            for agent in agents.values():
-                if agent.name not in targets and agent.name != from_name:
-                    for name, result in results.items():
-                        agent.add_message("system", f"{name}回复{from_name}:\n{result}")
-            return "\n\n".join(f"{name}: {result}" for name, result in results.items())
+                    task = asyncio.create_task(dispatch_target_reply(agent))
+                    pending_speak_tasks.add(task)
+                    task.add_done_callback(pending_speak_tasks.discard)
+            return "message sent."
         return speak_tool
     # ethan
     ethan = egent.agent.Agent(

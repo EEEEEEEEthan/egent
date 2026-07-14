@@ -251,7 +251,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 if function_name in self.__conversation_terminating_tool_names:
                     conversation_terminating_tool_name = function_name
             if conversation_terminating_tool_name is not None:
-                reply_text = f"使用了{conversation_terminating_tool_name}"
+                reply_text = f"{conversation_terminating_tool_name} called."
                 self.__emit_event(TurnCompleted(reply_text))
                 return reply_text
 
