@@ -128,7 +128,7 @@ class Studio:  # pylint: disable=too-few-public-methods
 
     async def send(self, message: str) -> str:
         """向主程发送用户消息并返回其回复。"""
-        await self.__agents["Ethan"].await_free()
+        await self.await_free()
         return await self.__agents["Ethan"].send_message("user", f"用户:\n{message}")
 
     async def __begin_develop_workflow(self, prompt: str) -> str:
@@ -151,3 +151,8 @@ class Studio:  # pylint: disable=too-few-public-methods
             switcher=coding_switcher,
         )
         return await node_coding.begin(prompt, "")
+
+    async def await_free(self) -> None:
+        """等待所有Agent空闲。"""
+        for agent in self.__agents.values():
+            await agent.await_free()
