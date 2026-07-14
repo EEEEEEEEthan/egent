@@ -35,7 +35,7 @@ def end_conversation(function: ToolCallable) -> ToolCallable:
 def as_builtin_tool(function: ToolCallable) -> ToolCallable:
     """将内置工具注册名强制为双下划线开头，与用户自定义工具区分。"""
     raw_name = function.__name__
-    if raw_name.startswith("__"):
+    if raw_name.startswith("__") and raw_name.endswith("__"):
         return function
 
     if inspect.iscoroutinefunction(function):
@@ -47,8 +47,8 @@ def as_builtin_tool(function: ToolCallable) -> ToolCallable:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return function(*args, **kwargs)
 
-    wrapper.__name__ = f"__{raw_name}"
-    wrapper.__qualname__ = f"__{raw_name}"
+    wrapper.__name__ = f"__{raw_name}__"
+    wrapper.__qualname__ = f"__{raw_name}__"
     if function_ends_conversation(function):
         end_conversation(wrapper)
     return wrapper
