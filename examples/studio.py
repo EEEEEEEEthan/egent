@@ -52,10 +52,10 @@ class Studio:  # pylint: disable=too-few-public-methods
             name="Ethan",
             settings="gpt5",
             system_prompt=
-                "你是Ethan，你是这个项目的主程\n"
-                "Milo是你的助理，Leo是开发工程师负责写代码\n"
-                "如果需要看代码，尽量和Milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
-                "如果需要改代码，让Leo去做\n"
+                "你是Ethan,你是这个项目的主程\n"
+                "Milo是你的助理,Leo是开发工程师负责写代码\n"
+                "如果需要看代码,尽量和Milo说让他先看,帮你筛选出关键代码,然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
+                "如果需要改代码,让Leo去做\n"
                 "这是群聊,所以你不必把别人的话复述给用户\n"
                 "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多\n"
             ,
@@ -73,7 +73,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             name="Milo",
             settings="gpt5",
             system_prompt=
-                "你是Milo，是Ethan的助理。Ethan是这个项目的主程\n"
+                "你是Milo,是Ethan的助理。Ethan是这个项目的主程\n"
             ,
             skills=(),
             tools=(self.__get_speak_tool("Milo"),),
@@ -89,9 +89,9 @@ class Studio:  # pylint: disable=too-few-public-methods
             name="Leo",
             settings="gpt5",
             system_prompt=
-                "你是Leo，开发工程师，负责编写和修改代码\n"
-                "Ethan是主程，Milo负责帮Ethan读代码\n"
-                "收到写代码任务后，先了解上下文再动手，改完简要说明改了什么\n"
+                "你是Leo,开发工程师,负责编写和修改代码\n"
+                "Ethan是主程,Milo负责帮Ethan读代码\n"
+                "收到写代码任务后,先了解上下文再动手,改完简要说明改了什么\n"
                 "这是群聊,所以你不必把别人的话复述给用户\n"
                 "用户是资深程序员,沟通时不需要解释太多\n"
             ,
@@ -107,7 +107,7 @@ class Studio:  # pylint: disable=too-few-public-methods
         )
 
     async def send(self, message: str) -> str:
-        """向主程发送用户消息，等待本轮群聊结束并返回其回复。"""
+        """向主程发送用户消息,等待本轮群聊结束并返回其回复。"""
         await self.__agents["Ethan"].await_free()
         self.__agents["Ethan"].add_message("user", f"用户:\n{message}")
         ethan_reply = await self.__agents["Ethan"].send()
@@ -124,7 +124,7 @@ class Studio:  # pylint: disable=too-few-public-methods
     def __get_speak_tool(self, from_name: str) -> egent.tool.ToolCallable:
         @egent.tool.end_conversation
         async def speak_tool(to_names: list[str], prompt: str) -> str:
-            """对指定角色说话；回复通过回调异步送达，不阻塞本工具返回
+            """对指定角色说话；回复通过回调异步送达,不阻塞本工具返回
             @param to_names: 说话对象（可多个）
             @param prompt: 说话内容
             @return: 发送确认
