@@ -19,7 +19,16 @@ async def async_main() -> int:
     studio_instance = studio.Studio()
 
     while True:
-        user_input = input(">>> ").strip()
+        try:
+            user_input = input(">>> ").strip()
+        except EOFError:
+            print()
+            return 0
+        except KeyboardInterrupt:
+            print()
+            return 0
+        if not user_input:
+            continue
         await studio_instance.send(user_input)
 
 if __name__ == "__main__":
