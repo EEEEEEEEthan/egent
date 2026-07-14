@@ -3,28 +3,80 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import
 
 import egent.agent
+import egent.builtin_tools.path_validator
 import egent.tool
-
-_RESET = "\033[0m"
-_RED = "\033[31m"
-_WHITE = "\033[37m"
-
-
-def print_speech(speaker: str, body: str) -> None:
-    """打印角色发言。"""
-    print(f"{_RED}{speaker}{_RESET}:\n{_WHITE}{body}{_RESET}")
 
 
 class Studio:
     """同一对话空间内的 Agent 集合；成员通过 speak 工具互相对话。"""
 
+    _WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
+    _DISCOVERABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+        whitelist=("*",),
+        blacklist=(
+            ".git",
+            "__pycache__",
+            ".pytest_cache",
+            ".ruff_cache",
+        ),
+    )
+    _READABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+        whitelist=("*",),
+        blacklist=(f"{_WORKING_DIRECTORY}/.egent/.model.toml",),
+    )
+    _NO_EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+        whitelist=(),
+        blacklist=("*",),
+    )
+
     def __init__(self) -> None:
         self._agents: dict[str, egent.agent.Agent] = {}
         self._pending_speak_tasks: set[asyncio.Task[None]] = set()
+
+        ethan = egent.agent.Agent(
+            name="ethan",
+            settings="gpt5",
+            system_prompt=
+                "你是ethan，你是这个项目的主程\n"
+                "milo是你的助理，如果需要看代码，尽量和milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
+                "这是群聊,所以你不必把别人的话复述给用户\n"
+                "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多\n"
+            ,
+            skills=(),
+            tools=(self.get_speak_tool("ethan"),),
+            path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+                discoverable=Studio._DISCOVERABLE_RULE,
+                readable=Studio._READABLE_RULE,
+                editable=Studio._NO_EDITABLE_RULE,
+            ),
+        )
+        self.add(ethan)
+
+        milo = egent.agent.Agent(
+            name="milo",
+            settings="gpt5",
+            system_prompt=
+                "你是milo，是ethan的助理。ethan是这个项目的主程\n"
+            ,
+            skills=(),
+            tools=(self.get_speak_tool("milo"),),
+            path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+                discoverable=Studio._DISCOVERABLE_RULE,
+                readable=Studio._READABLE_RULE,
+                editable=Studio._NO_EDITABLE_RULE,
+            ),
+        )
+        self.add(milo)
+
+    @staticmethod
+    def print_speech(speaker: str, body: str) -> None:
+        """打印角色发言。"""
+        print(f"\033[31m{speaker}\033[0m:\n\033[37m{body}\033[0m")
 
     @property
     def agents(self) -> dict[str, egent.agent.Agent]:
@@ -49,7 +101,7 @@ class Studio:
             from_agent = self._agents.get(from_name)
             targets = set[str](to_names)
             target_label = ", ".join(to_names)
-            print_speech(f"{from_name}->{target_label}", prompt)
+            Studio.print_speech(f"{from_name}->{target_label}", prompt)
             for agent in self._agents.values():
                 if agent.name in targets:
                     agent.add_message("user", f"{from_name}对你说:\n{prompt}")
@@ -57,7 +109,7 @@ class Studio:
                     agent.add_message("user", f"{from_name}对{target_label}说:\n{prompt}")
 
             def on_target_replied(name: str, result: str) -> None:
-                print_speech(f"{name}->{from_name}", result)
+                Studio.print_speech(f"{name}->{from_name}", result)
                 from_agent.add_message("user", f"{name}回复:\n{result}")
                 for agent in self._agents.values():
                     if agent.name not in targets and agent.name != from_name:
@@ -78,7 +130,7 @@ class Studio:
                 await asyncio.gather(
                     *(dispatch_target_reply(agent) for agent in target_agents)
                 )
-                print_speech(from_name, await from_agent.send())
+                Studio.print_speech(from_name, await from_agent.send())
 
             if any(agent.name in targets for agent in self._agents.values()):
                 task = asyncio.create_task(dispatch_speak_round())
