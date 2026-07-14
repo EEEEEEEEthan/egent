@@ -47,19 +47,25 @@ class Workflow:
     def __init__(self, leader: egent.agent.Agent, title: str) -> None:
         self.leader = leader
         self.title = title
-
-    async def start(self, description: str) -> str:
-        """根据描述执行开发工作并返回简报。"""
-        developer_name = "Leo"
-        print("委派开发工作")
-
         task_dir = Path(".egent/.temp")
         task_dir.mkdir(parents=True, exist_ok=True)
         task_id = uuid.uuid4().hex[:8]
         task_file = task_dir / f"task-{task_id}.txt"
-        task_file.write_text(description, encoding="utf-8")
-        task_path = task_file.as_posix()
+        self.task_path = task_file.as_posix()
+        self.log_path = task_dir / f"task-{task_id}.log"
 
+    async def start(self, description: str) -> str:
+        Path(self.task_path).write_text(description, encoding="utf-8")
+        success, message = await self.__coding()
+        if success:
+            #review
+            return message
+        else:
+            return message
+    
+    async def __coding(self) -> tuple[bool, str]:
+        """根据描述执行开发工作并返回简报。"""
+        developer_name = "Leo"
         developer = egent.agent.Agent(
             name=developer_name,
             settings="gpt5",
@@ -71,34 +77,24 @@ class Workflow:
             readable=READABLE_RULE,
             editable=EDITABLE_RULE,
         )
-        developer.add_message(
-            "user",
-            f"需求文件在 {task_path}，请读取后开始开发。注意：你无权编辑该需求文件。",
-        )
-        reminder = (
-            "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
-            "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
-        )
         result = ""
         for _ in range(5):
-            developer.add_message("user", reminder)
-            result = (await developer.send()).strip()
+            developer.add_message(
+                "user",
+                f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
+                "如果开发完成，请输出三个尖括号包裹的`完成`并输出简报，例如`<<<完成>>>\n简报`\n"
+                "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
+            )
             finish_marker = "<<<完成>>>"
             reject_marker = "<<<打回>>>"
             if result.startswith(finish_marker):
-                result = f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
-                break
+                return True, f'"{self.title}"开发工作完成,简报如下:\n{result[len(finish_marker):].strip()}\n\n'
             if result.startswith(reject_marker):
-                result = (
+                return False, (
                     f'"{self.title}"开发工作被打回,理由如下:\n{result[len(reject_marker):].strip()}\n\n'
                     "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
                 )
-                break
-        else:
-            result = f'"{self.title}"开发工作因为无法预测的错误而失败了'
-        print(result)
-        return result
-
+        return False, f'"{self.title}"开发工作因为无法预测的错误而失败了'
 
 async def begin_work_flow(
     leader: egent.agent.Agent,
