@@ -61,11 +61,13 @@ class Studio:  # pylint: disable=too-few-public-methods
             ,
             skills=(),
             tools=(self.__get_speak_tool("Ethan"),),
-            path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+        )
+        self.__agents["Ethan"].path_permissions = (
+            egent.builtin_tools.path_validator.PathPermissions(
                 discoverable=Studio._DISCOVERABLE_RULE,
                 readable=Studio._READABLE_RULE,
                 editable=Studio._NO_EDITABLE_RULE,
-            ),
+            )
         )
         self.__agents["Milo"] = egent.agent.Agent(
             name="Milo",
@@ -75,11 +77,13 @@ class Studio:  # pylint: disable=too-few-public-methods
             ,
             skills=(),
             tools=(self.__get_speak_tool("Milo"),),
-            path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+        )
+        self.__agents["Milo"].path_permissions = (
+            egent.builtin_tools.path_validator.PathPermissions(
                 discoverable=Studio._DISCOVERABLE_RULE,
                 readable=Studio._READABLE_RULE,
                 editable=Studio._NO_EDITABLE_RULE,
-            ),
+            )
         )
         self.__agents["Leo"] = egent.agent.Agent(
             name="Leo",
@@ -93,11 +97,13 @@ class Studio:  # pylint: disable=too-few-public-methods
             ,
             skills=(),
             tools=(self.__get_speak_tool("Leo"),),
-            path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+        )
+        self.__agents["Leo"].path_permissions = (
+            egent.builtin_tools.path_validator.PathPermissions(
                 discoverable=Studio._DISCOVERABLE_RULE,
                 readable=Studio._READABLE_RULE,
                 editable=Studio._EDITABLE_RULE,
-            ),
+            )
         )
 
     async def send(self, message: str) -> str:

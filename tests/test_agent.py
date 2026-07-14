@@ -145,18 +145,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
         ),
     )
 
-    permissions = egent.builtin_tools.path_validator.PathPermissions(
-        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("*",),
-        ),
-        readable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("*",),
-        ),
-        editable=egent.builtin_tools.path_validator.PathPermissionRule(
-            whitelist=("*",),
-        ),
-    )
-    agent = egent.agent.Agent(settings="test", path_permissions=permissions)
+    agent = egent.agent.Agent(settings="test")
 
     tool_names = {tool_schema["function"]["name"] for tool_schema in agent._Agent__api_tools}
 
@@ -256,6 +245,38 @@ def pydantic_core_init_error(
         "input": input_value,
         "url": "https://errors.pydantic.dev/2.13/v/int_parsing",
     }
+
+
+@pytest.mark.asyncio
+async def test_send_notifies_when_path_permissions_change(monkeypatch) -> None:
+    """path_permissions 变更后，下一轮 completion 前应插入系统通知。"""
+    agent = _make_test_agent(monkeypatch)
+    agent.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+        discoverable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=("/tmp/*",),
+        ),
+        readable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=("/tmp/*",),
+        ),
+        editable=egent.builtin_tools.path_validator.PathPermissionRule(
+            whitelist=(),
+            blacklist=("*",),
+        ),
+    )
+
+    async def fake_fetch_chat_completion() -> SimpleNamespace:
+        return _ok_completion()
+
+    monkeypatch.setattr(agent, "_Agent__fetch_chat_completion", fake_fetch_chat_completion)
+
+    await agent.send()
+
+    system_messages = [
+        message["content"]
+        for message in agent._Agent__messages
+        if message["role"] == "system"
+    ]
+    assert "文件系统权限更新了" in system_messages
 
 
 @pytest.mark.asyncio

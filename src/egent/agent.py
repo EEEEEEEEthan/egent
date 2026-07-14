@@ -112,7 +112,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         system_prompt: str = "",
         skills: Iterable[str | pathlib.Path] = (),
         tools: Iterable[egent.tool.ToolCallable] = (),
-        path_permissions: egent.builtin_tools.path_validator.PathPermissions | None = None,
     ) -> None:
         """初始化对话会话。
 
@@ -122,7 +121,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             system_prompt: 系统提示词正文；会与技能目录等拼成一条开头 system 消息。
             skills: 技能路径列表，每项为技能目录或 ``SKILL.md`` 路径。
             tools: 自定义工具列表，构造后固定不变。
-            path_permissions: 文件工具路径权限，构造后固定不变；``None`` 表示不限制。
         """
         self.name = name
         model_settings = egent.model_settings.ModelSettings.load(settings)
@@ -131,7 +129,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             base_url=model_settings.base_url,
         )
         self.model = model_settings.model_name
-        self.path_permissions = path_permissions
+        self.__file_system_tool_set = egent.builtin_tools.file_system_tools.FileSystemToolSet()
+        self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions()
+        self.__file_system_tool_set.path_permissions = self.__path_permissions
+        self.__path_permissions_text = str(self.__path_permissions)
         self.__messages: list[ChatMessage] = []
         self.__is_busy = False
         self.__busy_condition = asyncio.Condition()
@@ -153,9 +154,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 ),
                 *(
                     egent.tool.as_builtin_tool(tool_callable)
-                    for tool_callable in (
-                        egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools
-                    )
+                    for tool_callable in self.__file_system_tool_set.tools
                 ),
                 *tools,
             ],
@@ -188,6 +187,19 @@ class Agent:  # pylint: disable=too-many-instance-attributes
     def remove_listener(self, listener: Callable[[AgentEvent], None]) -> None:
         """移除流式事件监听器。"""
         self.__event_listeners.remove(listener)
+
+    @property
+    def path_permissions(self) -> egent.builtin_tools.path_validator.PathPermissions:
+        """文件工具路径权限，运行时可修改。"""
+        return self.__path_permissions
+
+    @path_permissions.setter
+    def path_permissions(
+        self,
+        value: egent.builtin_tools.path_validator.PathPermissions,
+    ) -> None:
+        self.__path_permissions = value
+        self.__file_system_tool_set.path_permissions = value
 
     @property
     def busy(self) -> bool:
@@ -224,6 +236,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
 
     async def __send_loop(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         while True:
+            self.__sync_path_permissions_notice()
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
             message = completion.choices[0].message
             reply_text = (message.content or "").strip()
@@ -317,6 +330,13 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"此前工作摘要:\n{summary}")
         return summary
+
+    def __sync_path_permissions_notice(self) -> None:
+        current_text = str(self.path_permissions)
+        if current_text == self.__path_permissions_text:
+            return
+        self.__path_permissions_text = current_text
+        self.__add_message("system", "文件系统权限更新了")
 
     def __emit_event(self, event: AgentEvent) -> None:
         for listener in self.__event_listeners:

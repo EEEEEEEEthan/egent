@@ -58,7 +58,7 @@ def path_matches_patterns(path: Path, patterns: tuple[str, ...]) -> bool:
 class PathPermissionRule:
     """单项路径权限：匹配白名单且不匹配黑名单即允许。"""
 
-    whitelist: tuple[str, ...]
+    whitelist: tuple[str, ...] = ("*",)
     blacklist: tuple[str, ...] = ()
 
     def allows(self, path: Path) -> bool:
@@ -76,9 +76,12 @@ class PathPermissionRule:
 class PathPermissions:
     """路径权限配置：可发现、可读、可编辑各一组白名单与黑名单。"""
 
-    discoverable: PathPermissionRule
-    readable: PathPermissionRule
-    editable: PathPermissionRule
+    discoverable: PathPermissionRule = PathPermissionRule()
+    readable: PathPermissionRule = PathPermissionRule()
+    editable: PathPermissionRule = PathPermissionRule()
+
+    def __str__(self) -> str:
+        return self.format_rules()
 
     def is_discoverable(self, path: Path) -> bool:
         """路径是否允许被遍历发现。"""
