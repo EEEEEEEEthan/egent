@@ -50,9 +50,10 @@ async def async_main() -> int:
     """运行交互式聊天，返回进程退出码。"""
     leader: egent.agent.Agent
     @egent.tool.end_conversation
-    def _delegate_development_work(description: str) -> str:
+    def _delegate_development_work(title: str, description: str) -> str:
         """委派开发工作
-        @description: 开发工作描述，务必精准且简练
+        @title: 开发工作标题,几个单词即可
+        @description: 开发工作描述,务必精准且简练
         """
         developer_name = "Leo"
         print("委派开发工作")
@@ -73,17 +74,24 @@ async def async_main() -> int:
             "如果你认为开发工作无法完成，或者需求不够明确，请输出三个尖括号包裹的`打回`并输出简报，例如`<<<打回>>>\n简报`\n"
         )
         async def send():
+            result = ""
             for _ in range(5):
                 developer.add_message("user", reminder)
                 result = (await developer.send()).strip()
                 if result.startswith("<<<完成>>>"):
-                    return result[len("<<<完成>>>"):]
+                    result = f'"{title}"开发工作完成,简报如下:\n{result[len("<<<完成>>>"):].strip()}\n\n'
+                    break
                 if result.startswith("<<<打回>>>"):
-                    return(
-                        f"开发工作被打回,理由如下:\n{result[len("<<<打回>>>"):].strip()}\n\n"
+                    result = (
+                        f'"{title}"开发工作被打回,理由如下:\n{result[len("<<<打回>>>"):].strip()}\n\n'
                         "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
-                )
-            return "开发工作因为无法预测的错误而失败了"
+                    )
+                    break
+            else:
+                result = f'"{title}"开发工作因为无法预测的错误而失败了'
+            await leader.await_free
+            await leader.add_message("user", result)
+            await leader.send()
         send()
         return f"已委派开发工作给{developer_name}"
 
