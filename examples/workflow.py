@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import copy
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
@@ -60,7 +60,30 @@ class Workflow:
         task_id = uuid.uuid4().hex[:8]
         task_file = task_dir / f"task-{task_id}.txt"
         self.task_path = task_file.as_posix()
-        self.__developer: egent.agent.Agent | None = None
+        self.__coding_submit_hook: Callable[[bool, str], None] | None = None
+
+        @egent.tool.end_conversation
+        def submit(success: bool, report: str) -> str:
+            """提交开发结论并结束本轮对话。
+            @param success: True 表示开发完成，False 表示打回（无法完成或需求不明）
+            @param report: 完成简报，或打回理由
+            """
+            if self.__coding_submit_hook is None:
+                raise RuntimeError("当前不在编码流程中，不能调用 submit")
+            self.__coding_submit_hook(success, report)
+            return "已提交"
+
+        self.__developer = egent.agent.Agent(
+            name="Leo",
+            settings="gpt5",
+            system_prompt=_DEVELOPER_SYSTEM_PROMPT,
+            tools=(submit,),
+        )
+        self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            discoverable=DISCOVERABLE_RULE,
+            readable=READABLE_RULE,
+            editable=EDITABLE_RULE,
+        )
 
     async def start(self, description: str) -> str:
         Path(self.task_path).write_text(description, encoding="utf-8")
@@ -77,7 +100,6 @@ class Workflow:
                 print(f"{BLUE}审查通过{RESET},简报如下:\n{message}")
                 return message
             print(f"{BLUE}审查未通过{RESET},审查意见如下:\n{comment}")
-            assert self.__developer is not None
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
@@ -88,53 +110,33 @@ class Workflow:
         """根据描述执行开发工作并返回简报。"""
         submit_result: tuple[bool, str] | None = None
 
-        @egent.tool.end_conversation
-        def submit(success: bool, report: str) -> str:
-            """提交开发结论并结束本轮对话。
-            @param success: True 表示开发完成，False 表示打回（无法完成或需求不明）
-            @param report: 完成简报，或打回理由
-            """
+        def on_submit(success: bool, report: str) -> None:
             nonlocal submit_result
             submit_result = (success, report)
-            return "已提交"
 
-        previous_developer = self.__developer
-        developer = egent.agent.Agent(
-            name="Leo",
-            settings="gpt5",
-            system_prompt=_DEVELOPER_SYSTEM_PROMPT,
-            tools=(submit,),
-        )
-        developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
-            discoverable=DISCOVERABLE_RULE,
-            readable=READABLE_RULE,
-            editable=EDITABLE_RULE,
-        )
-        if previous_developer is not None:
-            developer._Agent__messages = copy.deepcopy(  # pylint: disable=protected-access
-                previous_developer._Agent__messages,  # pylint: disable=protected-access
-            )
-        self.__developer = developer
-
-        for _ in range(5):
-            submit_result = None
-            developer.add_message(
-                "user",
-                f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                "开发完成后调用 submit(success=True, report=简报)；"
-                "若无法完成或需求不够明确，调用 submit(success=False, report=理由)。"
-                "必须通过 submit 提交结论。",
-            )
-            await developer.send()
-            if submit_result is not None:
-                success, report = submit_result
-                if success:
-                    return True, f'"{self.title}"开发工作完成,简报如下:\n{report}\n\n'
-                return False, (
-                    f'"{self.title}"开发工作被打回,理由如下:\n{report}\n\n'
-                    "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
+        self.__coding_submit_hook = on_submit
+        try:
+            for _ in range(5):
+                submit_result = None
+                self.__developer.add_message(
+                    "user",
+                    f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
+                    "开发完成后调用 submit(success=True, report=简报)；"
+                    "若无法完成或需求不够明确，调用 submit(success=False, report=理由)。"
+                    "必须通过 submit 提交结论。",
                 )
-        return False, f'"{self.title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
+                await self.__developer.send()
+                if submit_result is not None:
+                    success, report = submit_result
+                    if success:
+                        return True, f'"{self.title}"开发工作完成,简报如下:\n{report}\n\n'
+                    return False, (
+                        f'"{self.title}"开发工作被打回,理由如下:\n{report}\n\n'
+                        "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
+                    )
+            return False, f'"{self.title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
+        finally:
+            self.__coding_submit_hook = None
 
     async def __review(self) -> tuple[bool, str]:
         """审查开发成果，返回 (passed, comment)。"""
