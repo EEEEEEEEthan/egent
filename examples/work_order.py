@@ -19,13 +19,10 @@ class WorkOrderNode:
     switcher: Callable[[str], tuple[WorkOrderNode | None, HandoffMessage]]
     validator: Validator = field(default=lambda _result: None)
 
-    @property
-    def sign(self) -> str:
-        return self.agent.name
-
     async def begin(self, prompt: str, history: str = "") -> str:
         """注入本节点提示词并驱动 Agent 运转，直至完成或移交下一节点。"""
         await self.agent.await_free()
+        await self.agent.summarize()
         if prompt:
             self.agent.add_message("system", prompt)
         while True:
@@ -47,7 +44,7 @@ class WorkOrderNode:
             return await next_node.begin("", extended_history)
 
     def __extend_history(self, history: str, message: str) -> str:
-        segment = f"{self.sign}\n{message}"
+        segment = f"{self.agent.name}\n{message}"
         if history:
             return f"{history}\n\n{segment}"
         return segment
