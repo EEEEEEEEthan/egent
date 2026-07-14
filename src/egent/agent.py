@@ -145,8 +145,20 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             self.__conversation_terminating_tool_names,
         ) = egent.tool.resolve_tools(
             [
-                *(egent.builtin_tools.skill_tools.get_skill_tools(skill_index) if skill_index else []),
-                *egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools,
+                *(
+                    egent.tool.as_builtin_tool(tool_callable)
+                    for tool_callable in (
+                        egent.builtin_tools.skill_tools.get_skill_tools(skill_index)
+                        if skill_index
+                        else []
+                    )
+                ),
+                *(
+                    egent.tool.as_builtin_tool(tool_callable)
+                    for tool_callable in (
+                        egent.builtin_tools.file_system_tools.FileSystemToolSet(path_permissions).tools
+                    )
+                ),
                 *tools,
             ],
         )
@@ -369,7 +381,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         """构建技能索引与 system 摘要，单次读取各 SKILL.md。"""
         index: dict[str, pathlib.Path] = {}
         seen_ids: dict[str, int] = {}
-        catalog_lines = ["可用技能（使用 learn_skill 查看详情，run_skill_script 运行脚本）:"]
+        catalog_lines = ["可用技能（使用 __learn_skill 查看详情，__run_skill_script 运行脚本）:"]
         for raw_path in skill_paths:
             resolved = pathlib.Path(raw_path).resolve()
             skill_dir = resolved.parent if resolved.name == "SKILL.md" and resolved.is_file() else resolved

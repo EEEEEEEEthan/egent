@@ -26,6 +26,28 @@ async def echo_async(message: str) -> str:
     return message
 
 
+def test_as_builtin_tool_prefixes_name() -> None:
+    """as_builtin_tool 应将注册名改为双下划线开头。"""
+    wrapped = egent.tool.as_builtin_tool(add_numbers)
+    schema = egent.tool.tool_from_function(wrapped)
+
+    assert wrapped.__name__ == "__add_numbers"
+    assert schema["function"]["name"] == "__add_numbers"
+
+
+def test_as_builtin_tool_preserves_end_conversation() -> None:
+    """as_builtin_tool 应保留 end_conversation 标记。"""
+    @egent.tool.end_conversation
+    def finish() -> str:
+        """结束。"""
+        return "done"
+
+    wrapped = egent.tool.as_builtin_tool(finish)
+    _, _, conversation_terminating_tool_names = egent.tool.resolve_tools([wrapped])
+
+    assert conversation_terminating_tool_names == frozenset({"__finish"})
+
+
 def test_tool_from_function_schema() -> None:
     """tool_from_function 应生成包含参数描述的 schema。"""
     schema = egent.tool.tool_from_function(add_numbers)

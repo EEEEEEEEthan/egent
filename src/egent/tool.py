@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import inspect
 import json
 import re
@@ -29,6 +30,28 @@ def end_conversation(function: ToolCallable) -> ToolCallable:
     """标记工具：本轮 tool_calls 全部执行后结束 send()，不再请求模型。"""
     setattr(function, _END_CONVERSATION_ATTRIBUTE, True)
     return function
+
+
+def as_builtin_tool(function: ToolCallable) -> ToolCallable:
+    """将内置工具注册名强制为双下划线开头，与用户自定义工具区分。"""
+    raw_name = function.__name__
+    if raw_name.startswith("__"):
+        return function
+
+    if inspect.iscoroutinefunction(function):
+        @functools.wraps(function)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return await function(*args, **kwargs)
+    else:
+        @functools.wraps(function)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return function(*args, **kwargs)
+
+    wrapper.__name__ = f"__{raw_name}"
+    wrapper.__qualname__ = f"__{raw_name}"
+    if function_ends_conversation(function):
+        end_conversation(wrapper)
+    return wrapper
 
 
 def function_ends_conversation(function: ToolCallable) -> bool:
