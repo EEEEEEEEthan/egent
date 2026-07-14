@@ -19,14 +19,14 @@ import workflow
 
 async def run() -> int:
     """运行交互式聊天，返回进程退出码。"""
-    leader_holder: list[egent.agent.Agent] = []
 
     async def begin_work_flow(title: str, description: str) -> str:
         """启动工作流
         @param title: 工作流标题,几个单词即可
         @param description: 工作流描述,务必精准
         """
-        return await workflow.begin_work_flow(leader_holder[0], title, description)
+        nonlocal leader
+        return await workflow.begin_work_flow(leader, title, description)
 
     leader = egent.agent.Agent(
         name="ethan",
@@ -34,11 +34,10 @@ async def run() -> int:
         system_prompt=(
             "你是ethan，你是这个项目的主程\n"
             "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
-            "开发工作请使用"
+            f"开发工作请使用{begin_work_flow.__name__}工具"
         ),
         tools=(begin_work_flow,),
     )
-    leader_holder.append(leader)
     leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
         discoverable=workflow.DISCOVERABLE_RULE,
         readable=workflow.READABLE_RULE,
