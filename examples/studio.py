@@ -35,8 +35,8 @@ class Studio:  # pylint: disable=too-few-public-methods
     )
 
     def __init__(self) -> None:
-        self._agents: dict[str, egent.agent.Agent] = {}
-        self._pending_speak_tasks: set[asyncio.Task[None]] = set()
+        self.__agents: dict[str, egent.agent.Agent] = {}
+        self.__pending_speak_tasks: set[asyncio.Task[None]] = set[asyncio.Task[None]]()
 
         ethan = egent.agent.Agent(
             name="ethan",
@@ -55,8 +55,8 @@ class Studio:  # pylint: disable=too-few-public-methods
                 editable=Studio._NO_EDITABLE_RULE,
             ),
         )
-        self._ethan = ethan
-        self._agents[ethan.name] = ethan
+        self.__ethan = ethan
+        self.__agents[ethan.name] = ethan
 
         milo = egent.agent.Agent(
             name="milo",
@@ -72,16 +72,17 @@ class Studio:  # pylint: disable=too-few-public-methods
                 editable=Studio._NO_EDITABLE_RULE,
             ),
         )
-        self._agents[milo.name] = milo
+        self.__agents[milo.name] = milo
 
     async def send(self, message: str) -> str:
         """向主程发送用户消息，等待本轮群聊结束并返回其回复。"""
-        self._ethan.add_message("user", f"用户:\n{message}")
-        ethan_reply = await self._ethan.send()
+        await self.__ethan.await_free()
+        self.__ethan.add_message("user", f"用户:\n{message}")
+        ethan_reply = await self.__ethan.send()
         if ethan_reply:
             Studio.__print_speech("ethan", ethan_reply)
-        while self._pending_speak_tasks:
-            await asyncio.gather(*self._pending_speak_tasks)
+        while self.__pending_speak_tasks:
+            await asyncio.gather(*self.__pending_speak_tasks)
         return ethan_reply
 
     @staticmethod
@@ -98,11 +99,11 @@ class Studio:  # pylint: disable=too-few-public-methods
             """
             if from_name in to_names:
                 raise ValueError(f"不能对自己说话：{from_name}")
-            from_agent = self._agents.get(from_name)
+            from_agent = self.__agents.get(from_name)
             targets = set[str](to_names)
             target_label = ", ".join(to_names)
             Studio.__print_speech(f"{from_name}->{target_label}", prompt)
-            for agent in self._agents.values():
+            for agent in self.__agents.values():
                 if agent.name in targets:
                     agent.add_message("user", f"{from_name}对你说:\n{prompt}")
                 elif agent.name != from_name:
@@ -111,7 +112,7 @@ class Studio:  # pylint: disable=too-few-public-methods
             def on_target_replied(name: str, result: str) -> None:
                 Studio.__print_speech(f"{name}->{from_name}", result)
                 from_agent.add_message("user", f"{name}回复:\n{result}")
-                for agent in self._agents.values():
+                for agent in self.__agents.values():
                     if agent.name not in targets and agent.name != from_name:
                         agent.add_message("user", f"{name}回复{from_name}:\n{result}")
 
@@ -124,7 +125,7 @@ class Studio:  # pylint: disable=too-few-public-methods
                     on_target_replied(target_agent.name, result)
 
                 target_agents = [
-                    agent for agent in self._agents.values()
+                    agent for agent in self.__agents.values()
                     if agent.name in targets
                 ]
                 await asyncio.gather(
@@ -132,10 +133,10 @@ class Studio:  # pylint: disable=too-few-public-methods
                 )
                 Studio.__print_speech(from_name, await from_agent.send())
 
-            if any(agent.name in targets for agent in self._agents.values()):
+            if any(agent.name in targets for agent in self.__agents.values()):
                 task = asyncio.create_task(dispatch_speak_round())
-                self._pending_speak_tasks.add(task)
-                task.add_done_callback(self._pending_speak_tasks.discard)
+                self.__pending_speak_tasks.add(task)
+                task.add_done_callback(self.__pending_speak_tasks.discard)
             return "message sent."
 
         return speak_tool
