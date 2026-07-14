@@ -28,6 +28,21 @@ class Studio:  # pylint: disable=too-few-public-methods
         whitelist=(),
         blacklist=("*",),
     )
+    _EDITABLE_RULE = egent.builtin_tools.path_validator.PathPermissionRule(
+        whitelist=(f"{_WORKING_DIRECTORY}/*",),
+        blacklist=(
+            f"{_WORKING_DIRECTORY}/.git",
+            f"{_WORKING_DIRECTORY}/.git/*",
+            f"{_WORKING_DIRECTORY}/.egent",
+            f"{_WORKING_DIRECTORY}/.egent/*",
+            f"{_WORKING_DIRECTORY}/**/__pycache__",
+            f"{_WORKING_DIRECTORY}/**/__pycache__/*",
+            f"{_WORKING_DIRECTORY}/**/.pytest_cache",
+            f"{_WORKING_DIRECTORY}/**/.pytest_cache/*",
+            f"{_WORKING_DIRECTORY}/**/.ruff_cache",
+            f"{_WORKING_DIRECTORY}/**/.ruff_cache/*",
+        ),
+    )
 
     def __init__(self) -> None:
         self.__agents: dict[str, egent.agent.Agent] = {}
@@ -37,7 +52,9 @@ class Studio:  # pylint: disable=too-few-public-methods
             settings="gpt5",
             system_prompt=
                 "你是Ethan，你是这个项目的主程\n"
-                "Milo是你的助理，如果需要看代码，尽量和Milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
+                "Milo是你的助理，Leo是开发工程师负责写代码\n"
+                "如果需要看代码，尽量和Milo说让他先看，帮你筛选出关键代码，然后你再去看.尽量不要直接看,这会耽误你太多时间\n"
+                "如果需要改代码，让Leo去做\n"
                 "这是群聊,所以你不必把别人的话复述给用户\n"
                 "用户是资深程序员,也是制作人,所以你和用户沟通的时候不需要解释太多\n"
             ,
@@ -61,6 +78,24 @@ class Studio:  # pylint: disable=too-few-public-methods
                 discoverable=Studio._DISCOVERABLE_RULE,
                 readable=Studio._READABLE_RULE,
                 editable=Studio._NO_EDITABLE_RULE,
+            ),
+        )
+        self.__agents["Leo"] = egent.agent.Agent(
+            name="Leo",
+            settings="gpt5",
+            system_prompt=
+                "你是Leo，开发工程师，负责编写和修改代码\n"
+                "Ethan是主程，Milo负责帮Ethan读代码\n"
+                "收到写代码任务后，先了解上下文再动手，改完简要说明改了什么\n"
+                "这是群聊,所以你不必把别人的话复述给用户\n"
+                "用户是资深程序员,沟通时不需要解释太多\n"
+            ,
+            skills=(),
+            tools=(self.__get_speak_tool("Leo"),),
+            path_permissions=egent.builtin_tools.path_validator.PathPermissions(
+                discoverable=Studio._DISCOVERABLE_RULE,
+                readable=Studio._READABLE_RULE,
+                editable=Studio._EDITABLE_RULE,
             ),
         )
 
