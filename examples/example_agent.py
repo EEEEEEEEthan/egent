@@ -54,7 +54,7 @@ class Studio:
     def __init__(self) -> None:
         self.leader: egent.agent.Agent
 
-    async def _delegate_development_work(self, title: str, description: str) -> str:
+    async def __coding(self, title: str, description: str) -> str:
         """委派开发工作
         @title: 开发工作标题,几个单词即可
         @description: 开发工作描述,务必精准且简练
@@ -118,7 +118,7 @@ class Studio:
                 "你是ethan，你是这个项目的主程\n"
                 "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
             ),
-            tools=(self._delegate_development_work,),
+            tools=(self.__coding,),
         )
         self.leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=_DISCOVERABLE_RULE,
