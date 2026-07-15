@@ -112,6 +112,13 @@ class Workflow:
         return f"{result}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
 
     async def start(self, description: str) -> str:
+        success, report = await self.__start(description)
+        report = self.__with_dev_log(report)
+        if not success:
+            report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
+        return report
+
+    async def __start(self, description: str) -> tuple[bool, str]:
         Path(self.task_path).write_text(description, encoding="utf-8")
         Path(self.log_path).write_text("", encoding="utf-8")
         self.__dev_log(f"开始开发工作流: {self.title}", description)
@@ -121,7 +128,7 @@ class Workflow:
                 success, coding_report = await self.__coding()
                 if not success:
                     self.__dev_log("编码打回,理由如下:", coding_report)
-                    return self.__with_dev_log(coding_report)
+                    return False, coding_report
                 self.__dev_log("开始回归测试")
                 reg_passed, reg_output = self.__regression_test()
                 if reg_passed:
@@ -132,7 +139,7 @@ class Workflow:
                     f"回归测试未通过，请修复：\n{reg_output}",
                 )
             else:
-                return self.__with_dev_log(
+                return False, (
                     f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
                 )
             self.__dev_log("开始审查")
@@ -144,15 +151,13 @@ class Workflow:
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.",
                 )
                 self.__dev_log("开发工作简报如下:", summary)
-                return self.__with_dev_log(summary)
+                return True, summary
             self.__dev_log("审查未通过,审查意见如下:", comment)
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
             )
-        return self.__with_dev_log(
-            f'"{self.title}"开发工作因为超过最大审查轮次而失败了'
-        )
+        return False, f'"{self.title}"开发工作因为超过最大审查轮次而失败了'
 
     async def __coding(self) -> tuple[bool, str]:
         """根据描述执行开发工作并返回简报。"""
