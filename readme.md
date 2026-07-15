@@ -65,15 +65,11 @@ python examples/example_agent.py
 | `apply_patch` | 精确文本匹配替换 |
 | `delete` | 删除文件或目录 |
 
-#### Git 工具（`builtin_tools/git_tools.py`）
+#### 测试工具（`builtin_tools/test_tools.py`）
 
-**只读工具**：`status`, `log`, `diff`, `branch`, `remote`, `tag`
-
-**写入工具**：`init`, `clone`, `add`, `commit`, `push`, `pull`, `fetch`, `checkout`, `merge`, `reset`, `stash`
-
-#### Shell 工具（`builtin_tools/shell_tools.py`）
-
-执行任意 Shell 命令并返回 stdout / stderr / 退出码。
+| 工具 | 说明 |
+|------|------|
+| `run_regression_test` | 运行 pytest 回归测试，验证当前代码状态 |
 
 #### 技能工具（`builtin_tools/skill_tools.py`）
 
@@ -129,9 +125,8 @@ python examples/example_agent.py
 │   ├── _line_position.py    # 行位置工具
 │   └── builtin_tools/       # 内置工具实现
 │       ├── file_system_tools.py
-│       ├── git_tools.py
-│       ├── shell_tools.py
 │       ├── skill_tools.py
+│       ├── test_tools.py
 │       ├── path_validator.py
 │       └── command_utils.py
 ├── tests/                   # 单元测试
