@@ -47,6 +47,17 @@ _CODING_PRINCIPLE = (
     "当减少成员原则与linter冲突时，以减少成员原则为准。\n"
 )
 
+
+def _discover_test_files() -> str:
+    """扫描 tests/ 目录下所有 test_*.py 文件，返回顿号分隔的相对路径字符串。"""
+    tests_dir = Path.cwd() / "tests"
+    if not tests_dir.is_dir():
+        return ""
+    return "、".join(
+        str(p.relative_to(Path.cwd())) for p in sorted(tests_dir.rglob("test_*.py"))
+    )
+
+
 class Workflow:  # pylint: disable=too-few-public-methods
     """工作流：一整套开发工作。"""
 
@@ -59,6 +70,16 @@ class Workflow:  # pylint: disable=too-few-public-methods
         self.task_path = (task_dir / f"task-{self.task_id}.txt").as_posix()
         self.log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
+
+        def run_regression_test(targets: str) -> str:  # pylint: disable=redefined-outer-name
+            """placeholder"""
+            return egent.builtin_tools.test_tools.run_regression_test(targets)
+
+        run_regression_test.__doc__ = (
+            "运行 pytest 回归测试，验证当前代码状态。\n"
+            f"@param targets: 与本次开发相关的测试路径或节点（如 tests/test_foo.py::test_bar），"
+            f"空格分隔；可用测试文件：{_discover_test_files()}"
+        )
 
         @egent.tool.end_conversation
         def submit(success: bool, report: str) -> str:
@@ -88,7 +109,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
             name="Leo",
             settings="gpt5",
             system_prompt=developer_system_prompt,
-            tools=(submit, egent.builtin_tools.test_tools.run_regression_test),
+            tools=(submit, run_regression_test),
         )
         self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
