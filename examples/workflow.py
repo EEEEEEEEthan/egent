@@ -133,7 +133,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
                 self.__dev_log("开始编码")
                 success, coding_report = await self.__coding()
                 if not success:
-                    self.__dev_log("编码打回,理由如下:", coding_report)
+                    self.__dev_log("需求被打回,理由如下:", coding_report)
                     return False, coding_report
                 self.__dev_log("开始回归测试")
                 reg_passed, reg_output = run_regression_test()
