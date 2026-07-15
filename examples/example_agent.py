@@ -28,15 +28,22 @@ async def run() -> int:
         nonlocal leader
         return await workflow.begin_work_flow(leader, title, description)
 
+    def run_regression_test() -> str:
+        """跑 pytest 全量回归测试，用于验证项目当前测试状态。"""
+        passed, output = workflow.run_regression_test()
+        if passed:
+            return "回归测试全部通过"
+        return f"回归测试未通过：\n{output}"
+
     leader = egent.agent.Agent(
         name="ethan",
         settings="gpt5",
         system_prompt=(
             "你是ethan，你是这个项目的主程\n"
             "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
-            f"开发工作(修改项目)请使用{begin_work_flow.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)"
+            f"开发工作(修改项目)请使用{begin_work_flow.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
         ),
-        tools=(begin_work_flow,),
+        tools=(begin_work_flow, run_regression_test),
     )
     leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
         discoverable=workflow.DISCOVERABLE_RULE,

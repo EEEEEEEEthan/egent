@@ -127,7 +127,7 @@ class Workflow:
                     self.__dev_log("编码打回,理由如下:", coding_report)
                     return False, coding_report
                 self.__dev_log("开始回归测试")
-                reg_passed, reg_output = self.__regression_test()
+                reg_passed, reg_output = run_regression_test()
                 if reg_passed:
                     break
                 self.__dev_log("回归测试未通过", reg_output)
@@ -188,22 +188,6 @@ class Workflow:
         finally:
             self.__coding_submit_hook = None
 
-    def __regression_test(self) -> tuple[bool, str]:
-        """跑 pytest 全量回归测试，返回 (passed, output)。"""
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "pytest"],
-                capture_output=True,
-                text=True,
-                cwd=Path.cwd(),
-            )
-        except OSError as error:
-            return False, str(error)
-        if result.returncode != 0:
-            output = (result.stdout + "\n" + result.stderr).strip()
-            return False, output
-        return True, ""
-
     async def __review(self) -> tuple[bool, str]:
         """审查开发成果，返回 (passed, comment)。"""
         submit_result: tuple[bool, str] | None = None
@@ -262,6 +246,23 @@ class Workflow:
             if submit_result is not None:
                 return submit_result
         return False, f'"{self.title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
+
+
+def run_regression_test() -> tuple[bool, str]:
+    """跑 pytest 全量回归测试，返回 (passed, output)。"""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest"],
+            capture_output=True,
+            text=True,
+            cwd=Path.cwd(),
+        )
+    except OSError as error:
+        return False, str(error)
+    if result.returncode != 0:
+        output = (result.stdout + "\n" + result.stderr).strip()
+        return False, output
+    return True, ""
 
 
 async def begin_work_flow(
