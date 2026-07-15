@@ -140,6 +140,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
             success, report = await self.__start(description)
         except Exception as exc:
             report = f"开发工作流异常：{type(exc).__name__}: {exc}"
+            self.__dev_log(report)
             return report
         report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
         if not success:
