@@ -12,6 +12,7 @@ import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 im
 
 import egent.agent
 import egent.builtin_tools.path_validator
+import egent.builtin_tools.test_tools
 import egent.tool
 
 _WORKING_DIRECTORY = Path.cwd().resolve().as_posix()
@@ -73,6 +74,8 @@ class Workflow:
 
         developer_system_prompt = (
             "你是开发工程师，负责根据描述开发代码。"
+            "开发过程中可用 run_regression_test 验证与你本次改动相关的测试；"
+            "专注于自己的内容即可，提交后会自动进行全量回归测试。"
             + _CODING_PRINCIPLE
         )
         editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
@@ -86,7 +89,7 @@ class Workflow:
             name="Leo",
             settings="gpt5",
             system_prompt=developer_system_prompt,
-            tools=(submit,),
+            tools=(submit, egent.builtin_tools.test_tools.run_regression_test),
         )
         self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
@@ -285,19 +288,10 @@ def reset_git_workspace() -> tuple[bool, str]:
 
 def run_regression_test() -> tuple[bool, str]:
     """跑 pytest 全量回归测试，返回 (passed, output)。"""
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest"],
-            capture_output=True,
-            text=True,
-            cwd=Path.cwd(),
-        )
-    except OSError as error:
-        return False, str(error)
-    if result.returncode != 0:
-        output = (result.stdout + "\n" + result.stderr).strip()
-        return False, output
-    return True, ""
+    passed, output = egent.builtin_tools.test_tools.execute_pytest(None)
+    if passed:
+        return True, ""
+    return False, output
 
 
 async def begin_work_flow(
