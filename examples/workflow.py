@@ -8,7 +8,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
 
-import git_tools
+import shell_tools
 import egent.agent
 import egent.builtin_tools.path_validator
 import egent.builtin_tools.test_tools
@@ -115,7 +115,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
         success, report = await self.__start(description)
         report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
         if not success:
-            reset_ok, reset_output = git_tools.reset_git_workspace()
+            reset_ok, reset_output = reset_git_workspace()
             if reset_ok:
                 self.__dev_log("工作流失败，已强制恢复 git 工作区", reset_output)
             else:
@@ -212,6 +212,13 @@ class Workflow:  # pylint: disable=too-few-public-methods
             submit_result = (success, report)
             return "已提交"
 
+        def git_diff() -> str:
+            """查看代码变更 diff。返回工作区相对 HEAD 的全部变更（git diff HEAD）。"""
+            _, output = shell_tools.run_command("git", "diff", "HEAD")
+            if not output:
+                return "没有 diff（工作区干净，或没有可展示的变更）"
+            return output
+
         reviewer_system_prompt = (
             "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
             + _CODING_PRINCIPLE
@@ -220,7 +227,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
             name="Reviewer",
             settings="gpt5",
             system_prompt=reviewer_system_prompt,
-            tools=(submit, git_tools.git_diff),
+            tools=(submit, git_diff),
         )
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
@@ -240,6 +247,18 @@ class Workflow:  # pylint: disable=too-few-public-methods
             if submit_result is not None:
                 return submit_result
         return False, f'"{self.title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
+
+
+def reset_git_workspace() -> tuple[bool, str]:
+    """将工作区强制恢复为 HEAD 干净状态，返回 (success, output)。"""
+    reset_code, reset_output = shell_tools.run_command("git", "reset", "--hard", "HEAD")
+    clean_code, clean_output = shell_tools.run_command("git", "clean", "-fd")
+    output = "\n".join(part for part in (reset_output, clean_output) if part)
+    if not output:
+        output = "工作区已恢复为 HEAD 干净状态"
+    if reset_code != 0 or clean_code != 0:
+        return False, output
+    return True, output
 
 
 def run_regression_test() -> tuple[bool, str]:
