@@ -66,13 +66,13 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
     """工作流：一整套开发工作。"""
 
     def __init__(self, leader: egent.agent.Agent, title: str) -> None:
-        self.leader = leader
-        self.title = title
+        self.__leader = leader  # pylint: disable=unused-private-member
+        self.__title = title
         task_dir = Path(".egent/.temp")
         task_dir.mkdir(parents=True, exist_ok=True)
         self.task_id = uuid.uuid4().hex[:8]
-        self.task_path = (task_dir / f"task-{self.task_id}.txt").as_posix()
-        self.log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
+        self.__task_path = (task_dir / f"task-{self.task_id}.txt").as_posix()
+        self.__log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
         self.__blackboard = ""
 
@@ -136,20 +136,20 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 f"{_WORKING_DIRECTORY}/.egent/.temp/task-*",
             ),
         )
-        self.__developer = egent.agent.Agent(
+        self.__coder = egent.agent.Agent(
             name="Leo",
             settings="coder",
             system_prompt=developer_system_prompt,
             tools=(submit, run_regression_test, *self.__blackboard_tools),
         )
-        self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+        self.__coder.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
             readable=READABLE_RULE,
             editable=editable_rule,
         )
 
     def __dev_log(self, title: str, content: str = "") -> None:
-        with Path(self.log_path).open("a", encoding="utf-8") as log_file:
+        with Path(self.__log_path).open("a", encoding="utf-8") as log_file:
             log_file.write(title)
             log_file.write("\n")
             if content:
@@ -164,9 +164,9 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
 
     async def start(self, description: str) -> tuple[bool, str]:
         """按描述启动开发工作流，返回 (成功与否, 报告)。"""
-        Path(self.task_path).write_text(description, encoding="utf-8")
-        Path(self.log_path).write_text("", encoding="utf-8")
-        self.__dev_log(f"开始开发工作流: {self.title}", description)
+        Path(self.__task_path).write_text(description, encoding="utf-8")
+        Path(self.__log_path).write_text("", encoding="utf-8")
+        self.__dev_log(f"开始开发工作流: {self.__title}", description)
         for _ in range(10):
             for _ in range(10):
                 self.__dev_log("开始编码")
@@ -181,30 +181,30 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 if reg_passed:
                     break
                 self.__dev_log("回归测试未通过", reg_output)
-                self.__developer.add_message(
+                self.__coder.add_message(
                     "user",
                     f"回归测试未通过，请修复：\n{reg_output}",
                 )
             else:
                 return False, (
-                    f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
+                    f'"{self.__title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
                 )
             self.__dev_log("开始审查")
             passed, comment = await self.__review()
             if passed:
                 self.__dev_log("审查通过,简报如下:", comment)
-                summary = await self.__developer.send_message(
+                summary = await self.__coder.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.(直接输出即可,不要使用submit工具)",
                 )
                 self.__dev_log("开发工作简报如下:", summary)
                 return True, summary
             self.__dev_log("审查未通过,审查意见如下:", comment)
-            self.__developer.add_message(
+            self.__coder.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
             )
-        return False, f'"{self.title}"开发工作因为超过最大审查轮次而失败了'
+        return False, f'"{self.__title}"开发工作因为超过最大审查轮次而失败了'
 
     async def __coding(self) -> tuple[bool, str]:
         """根据描述执行开发工作并返回简报。"""
@@ -218,33 +218,33 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         try:
             for _ in range(5):
                 submit_result = None
-                self.__developer.add_message(
+                self.__coder.add_message(
                     "user",
                     (
-                        f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
+                        f"需求文件在 {self.__task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
                         "开发完成后调用 submit(success=True, report=\"开发简报\")；"
                         "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
                         "必须通过 submit 提交结论。"
                         "可以用 __bt_read_blackboard 和 __bt_rewrite_blackboard 读写黑板，与审查员传递信息。"
                     ),
                 )
-                await self.__developer.send()
+                await self.__coder.send()
                 if submit_result is not None:
                     success, report = submit_result
                     if success:
-                        return True, f'"{self.title}"开发工作完成,简报如下:\n{report}\n\n'
+                        return True, f'"{self.__title}"开发工作完成,简报如下:\n{report}\n\n'
                     return False, (
-                        f'"{self.title}"开发工作被打回,理由如下:\n{report}\n\n'
+                        f'"{self.__title}"开发工作被打回,理由如下:\n{report}\n\n'
                         "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
                     )
-            return False, f'"{self.title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
+            return False, f'"{self.__title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
         finally:
             self.__coding_submit_hook = None
 
     async def __tidy_code(self) -> None:
         """让 developer 整理刚写的代码，优化但不改变功能行为。"""
         self.__dev_log("开始代码整理")
-        tidy_report = await self.__developer.send_message(
+        tidy_report = await self.__coder.send_message(
             "user",
             "刚才的编码已完成。现在请按照编码原则（最小域原则、减少成员原则、最佳实现原则、私有方法命名原则）"
             "整理你刚才写的代码，使其更优雅紧凑，但不改变功能行为。"
@@ -297,7 +297,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             reviewer.add_message(
                 "user",
                 (
-                    f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
+                    f"需求文件在 {self.__task_path}，请审查代码是否符合需求。"
                     "审查通过时调用 submit(success=True, report=\"审查意见\")；"
                     "不通过时调用 submit(success=False, report=\"审查意见\")。"
                     "必须通过 submit 提交结论。"
@@ -312,7 +312,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             await reviewer.send()
             if submit_result is not None:
                 return submit_result
-        return False, f'"{self.title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
+        return False, f'"{self.__title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
 
 
 def run_regression_test() -> tuple[bool, str]:
