@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import _bootstrap  # noqa: F401
-
 from types import TracebackType
+
+import _bootstrap  # pylint: disable=unused-import  # 必须在 import egent 之前
 
 import egent.agent
 

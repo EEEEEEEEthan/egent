@@ -47,7 +47,7 @@ _CODING_PRINCIPLE = (
     "当减少成员原则与linter冲突时，以减少成员原则为准。\n"
 )
 
-class Workflow:
+class Workflow:  # pylint: disable=too-few-public-methods
     """工作流：一整套开发工作。"""
 
     def __init__(self, leader: egent.agent.Agent, title: str) -> None:
@@ -111,6 +111,7 @@ class Workflow:
             print(content)
 
     async def start(self, description: str) -> str:
+        """按描述启动开发工作流，返回最终报告。"""
         success, report = await self.__start(description)
         report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
         if not success:
@@ -220,7 +221,9 @@ class Workflow:
                 args.append("HEAD")
             elif staged:
                 args.append("--staged")
-            result = subprocess.run(args, capture_output=True, text=True, cwd=Path.cwd())
+            result = subprocess.run(
+                args, capture_output=True, text=True, cwd=Path.cwd(), check=False,
+            )
             output = result.stdout.strip()
             if not output:
                 return "没有 diff（工作区干净，或没有可展示的变更）"
@@ -265,12 +268,14 @@ def reset_git_workspace() -> tuple[bool, str]:
             capture_output=True,
             text=True,
             cwd=cwd,
+            check=False,
         )
         clean = subprocess.run(
             ["git", "clean", "-fd"],
             capture_output=True,
             text=True,
             cwd=cwd,
+            check=False,
         )
     except OSError as error:
         return False, str(error)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION_TARGETS = (
-    str(PROJECT_ROOT / "examples" / "example_agent.py"),
+    str(PROJECT_ROOT / "examples"),
     str(PROJECT_ROOT / "src" / "egent"),
 )
 TEST_TARGETS = (str(PROJECT_ROOT / "tests"),)
