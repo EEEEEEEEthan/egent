@@ -48,6 +48,7 @@ _CODING_PRINCIPLE = (
     "【最佳实现原则】实现应该尽可能优雅,不要过度设计和过度封装.也不要执着于最小修改."
     "如果重构可以带来更优雅的实现,应该优先考虑重构.\n"
 )
+_BLACKBOARD_MAX_CHARS = 1000
 
 
 def _discover_test_files() -> str:
@@ -60,7 +61,7 @@ def _discover_test_files() -> str:
     )
 
 
-class Workflow:  # pylint: disable=too-few-public-methods
+class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
     """工作流：一整套开发工作。"""
 
     def __init__(self, leader: egent.agent.Agent, title: str) -> None:
@@ -72,6 +73,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
         self.task_path = (task_dir / f"task-{self.task_id}.txt").as_posix()
         self.log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
+        self.__blackboard = ""
 
         def run_regression_test(targets: str) -> str:  # pylint: disable=redefined-outer-name
             """placeholder"""
@@ -95,10 +97,34 @@ class Workflow:  # pylint: disable=too-few-public-methods
             self.__coding_submit_hook(success, report)
             return "已提交"
 
+        @egent.tool.as_builtin_tool
+        def read_blackboard() -> str:
+            """读取黑板当前内容。"""
+            if not self.__blackboard:
+                return "黑板为空"
+            return self.__blackboard
+
+        @egent.tool.as_builtin_tool
+        def rewrite_blackboard(content: str) -> str:
+            """覆盖写入黑板内容，超长截断。
+            @param content: 要写入黑板的内容
+            """
+            if len(content) > _BLACKBOARD_MAX_CHARS:
+                self.__blackboard = content[:_BLACKBOARD_MAX_CHARS]
+                return f"内容超过{_BLACKBOARD_MAX_CHARS}字符，已截断并写入黑板"
+            self.__blackboard = content
+            return "黑板内容已更新"
+
+        self.__blackboard_tools = (read_blackboard, rewrite_blackboard)
+
         developer_system_prompt = (
             "你是开发工程师，负责根据描述开发代码。"
             "开发过程中可用 run_regression_test 验证与你本次改动相关的测试."
             "你需要跑的测试有pylint和你的修改对应的测试.提交后会自动进行全量回归测试。"
+            "你的队友是代码审查员 Reviewer，他会审查你的代码。"
+            "你们之间有一个共享黑板（blackboard），是一块最多"
+            f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
+            "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
             + _CODING_PRINCIPLE
         )
         editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
@@ -112,7 +138,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
             name="Leo",
             settings="gpt5",
             system_prompt=developer_system_prompt,
-            tools=(submit, run_regression_test),
+            tools=(submit, run_regression_test, *self.__blackboard_tools),
         )
         self.__developer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
@@ -138,7 +164,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
         """按描述启动开发工作流，返回最终报告。"""
         try:
             success, report = await self.__start(description)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             report = f"开发工作流异常：{type(exc).__name__}: {exc}"
             self.__dev_log(report)
             return report
@@ -212,7 +238,8 @@ class Workflow:  # pylint: disable=too-few-public-methods
                     f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
                     "开发完成后调用 submit(success=True, report=\"开发简报\")；"
                     "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
-                    "必须通过 submit 提交结论。",
+                    "必须通过 submit 提交结论。"
+                    "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与审查员传递信息。",
                 )
                 await self.__developer.send()
                 if submit_result is not None:
@@ -250,13 +277,17 @@ class Workflow:  # pylint: disable=too-few-public-methods
 
         reviewer_system_prompt = (
             "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
+            "你的队友是开发工程师 Leo，他负责编写代码。"
+            "你们之间有一个共享黑板（blackboard），是一块最多"
+            f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
+            "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
             + _CODING_PRINCIPLE
         )
         reviewer = egent.agent.Agent(
             name="Reviewer",
             settings="gpt5",
             system_prompt=reviewer_system_prompt,
-            tools=(submit, git_diff),
+            tools=(submit, git_diff, *self.__blackboard_tools),
         )
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
@@ -270,7 +301,8 @@ class Workflow:  # pylint: disable=too-few-public-methods
                 f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
                 "审查通过时调用 submit(success=True, report=\"审查意见\")；"
                 "不通过时调用 submit(success=False, report=\"审查意见\")。"
-                "必须通过 submit 提交结论。\n",
+                "必须通过 submit 提交结论。"
+                "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与开发工程师传递信息。\n"
                 "checklist:\n"
                 "- 回归测试是否能覆盖到本次修改\n"
                 "- 是否符合项目规范\n"
