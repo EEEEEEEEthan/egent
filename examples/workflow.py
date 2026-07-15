@@ -47,6 +47,7 @@ _CODING_PRINCIPLE = (
     "当减少成员原则与linter冲突时，以减少成员原则为准。\n"
     "【最佳实现原则】实现应该尽可能优雅,不要过度设计和过度封装.也不要执着于最小修改."
     "如果重构可以带来更优雅的实现,应该优先考虑重构.\n"
+    "【私有方法命名原则】类的私有方法应使用双下划线前缀命名，而非单下划线。\n"
 )
 _BLACKBOARD_MAX_CHARS = 1000
 
@@ -146,7 +147,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             editable=editable_rule,
         )
 
-    def _dev_log(self, title: str, content: str = "") -> None:
+    def __dev_log(self, title: str, content: str = "") -> None:
         with Path(self.log_path).open("a", encoding="utf-8") as log_file:
             log_file.write(title)
             log_file.write("\n")
@@ -164,20 +165,20 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         """按描述启动开发工作流，返回 (成功与否, 报告)。"""
         Path(self.task_path).write_text(description, encoding="utf-8")
         Path(self.log_path).write_text("", encoding="utf-8")
-        self._dev_log(f"开始开发工作流: {self.title}", description)
+        self.__dev_log(f"开始开发工作流: {self.title}", description)
         for _ in range(10):
             for _ in range(10):
-                self._dev_log("开始编码")
+                self.__dev_log("开始编码")
                 success, coding_report = await self.__coding()
                 if not success:
-                    self._dev_log("需求被打回,理由如下:", coding_report)
+                    self.__dev_log("需求被打回,理由如下:", coding_report)
                     return False, coding_report
-                self._dev_log("编码完成,简报如下:", coding_report)
-                self._dev_log("开始回归测试")
+                self.__dev_log("编码完成,简报如下:", coding_report)
+                self.__dev_log("开始回归测试")
                 reg_passed, reg_output = run_regression_test()
                 if reg_passed:
                     break
-                self._dev_log("回归测试未通过", reg_output)
+                self.__dev_log("回归测试未通过", reg_output)
                 self.__developer.add_message(
                     "user",
                     f"回归测试未通过，请修复：\n{reg_output}",
@@ -186,17 +187,17 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 return False, (
                     f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
                 )
-            self._dev_log("开始审查")
+            self.__dev_log("开始审查")
             passed, comment = await self.__review()
             if passed:
-                self._dev_log("审查通过,简报如下:", comment)
+                self.__dev_log("审查通过,简报如下:", comment)
                 summary = await self.__developer.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.(直接输出即可,不要使用submit工具)",
                 )
-                self._dev_log("开发工作简报如下:", summary)
+                self.__dev_log("开发工作简报如下:", summary)
                 return True, summary
-            self._dev_log("审查未通过,审查意见如下:", comment)
+            self.__dev_log("审查未通过,审查意见如下:", comment)
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
@@ -335,15 +336,12 @@ async def begin_work_flow(
         success, report = await wf.start(description)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         report = f"开发工作流异常：{type(exc).__name__}: {exc}"
-        wf._dev_log(report)  # pylint: disable=protected-access
+        print(f"\033[31m{report}\033[0m")
         return report
     report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
     if not success:
         reset_ok, reset_output = reset_git_workspace()
-        if reset_ok:
-            wf._dev_log("工作流失败，已强制恢复 git 工作区", reset_output)  # pylint: disable=protected-access
-        else:
-            wf._dev_log("工作流失败，git 恢复失败", reset_output)  # pylint: disable=protected-access
+        if not reset_ok:
             report += f"\n\ngit 恢复失败：\n{reset_output}"
         report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
     return report
