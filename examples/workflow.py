@@ -94,17 +94,19 @@ class Workflow:
             editable=editable_rule,
         )
 
-    def __dev_log(self, message: str, *, highlight: bool = False) -> None:
+    def __dev_log(self, title: str, content: str = "") -> None:
         with Path(self.log_path).open("a", encoding="utf-8") as log_file:
-            log_file.write(message)
-            if not message.endswith("\n"):
+            log_file.write(title)
+            log_file.write("\n")
+            if content:
+                log_file.write(content)
                 log_file.write("\n")
-        if highlight:
-            blue = "\033[34m"
-            reset = "\033[0m"
-            print(f"{blue}{message}{reset}")
-        else:
-            print(message)
+            log_file.write("\n")
+        blue = "\033[34m"
+        reset = "\033[0m"
+        print(f"{blue}{title}{reset}")
+        if content:
+            print(content)
 
     def __with_dev_log(self, result: str) -> str:
         return f"{result}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
@@ -112,28 +114,19 @@ class Workflow:
     async def start(self, description: str) -> str:
         Path(self.task_path).write_text(description, encoding="utf-8")
         Path(self.log_path).write_text("", encoding="utf-8")
-        self.__dev_log(
-            f"开始开发工作流: {self.title}\n{description}",
-            highlight=True,
-        )
+        self.__dev_log(f"开始开发工作流: {self.title}", description)
         for _ in range(5):
             for _ in range(5):
-                self.__dev_log("开始编码", highlight=True)
+                self.__dev_log("开始编码")
                 success, coding_report = await self.__coding()
                 if not success:
-                    self.__dev_log(
-                        f"编码打回,理由如下:\n{coding_report}",
-                        highlight=True,
-                    )
+                    self.__dev_log("编码打回,理由如下:", coding_report)
                     return self.__with_dev_log(coding_report)
-                self.__dev_log("开始回归测试", highlight=True)
+                self.__dev_log("开始回归测试")
                 reg_passed, reg_output = self.__regression_test()
                 if reg_passed:
                     break
-                self.__dev_log(
-                    f"回归测试未通过{reg_output}",
-                    highlight=True,
-                )
+                self.__dev_log("回归测试未通过", reg_output)
                 self.__developer.add_message(
                     "user",
                     f"回归测试未通过，请修复：\n{reg_output}",
@@ -142,23 +135,17 @@ class Workflow:
                 return self.__with_dev_log(
                     f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
                 )
-            self.__dev_log("开始审查", highlight=True)
+            self.__dev_log("开始审查")
             passed, comment = await self.__review()
             if passed:
-                self.__dev_log(
-                    f"审查通过,简报如下:\n{comment}",
-                    highlight=True,
-                )
+                self.__dev_log("审查通过,简报如下:", comment)
                 summary = self.__developer.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.",
                 )
-                self.__dev_log(f"开发工作简报如下:\n{summary}")
+                self.__dev_log("开发工作简报如下:", summary)
                 return self.__with_dev_log(summary)
-            self.__dev_log(
-                f"审查未通过,审查意见如下:\n{comment}",
-                highlight=True,
-            )
+            self.__dev_log("审查未通过,审查意见如下:", comment)
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
