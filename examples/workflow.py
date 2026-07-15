@@ -101,10 +101,10 @@ class Workflow:
         for _ in range(5):
             for _ in range(5):
                 print(f"{blue}开始编码{reset}")
-                success, message = await self.__coding()
+                success, coding_report = await self.__coding()
                 if not success:
-                    print(f"{blue}编码打回{reset},理由如下:\n{message}")
-                    return message
+                    print(f"{blue}编码打回{reset},理由如下:\n{coding_report}")
+                    return coding_report
                 print(f"{blue}开始回归测试{reset}")
                 reg_passed, reg_output = self.__regression_test()
                 if reg_passed:
@@ -119,8 +119,10 @@ class Workflow:
             print(f"{blue}开始审查{reset}")
             passed, comment = await self.__review()
             if passed:
-                print(f"{blue}审查通过{reset},简报如下:\n{message}")
-                return message
+                print(f"{blue}审查通过{reset},简报如下:\n{comment}")
+                summary = self.__developer.send_message("user", "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.")
+                print(f"{blue}开发工作简报如下:\n{summary}")
+                return summary
             print(f"{blue}审查未通过{reset},审查意见如下:\n{comment}")
             self.__developer.add_message(
                 "user",
@@ -143,8 +145,8 @@ class Workflow:
                 self.__developer.add_message(
                     "user",
                     f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                    "开发完成后调用 submit(success=True, report=简报)；"
-                    "若无法完成或需求不够明确，调用 submit(success=False, report=理由)。"
+                    "开发完成后调用 submit(success=True, report=\"-\")；"
+                    "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
                     "必须通过 submit 提交结论。",
                 )
                 await self.__developer.send()
@@ -223,8 +225,8 @@ class Workflow:
             reviewer.add_message(
                 "user",
                 f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
-                "审查通过时调用 submit(success=True, report=简要说明)；"
-                "不通过时调用 submit(success=False, report=具体意见)。"
+                "审查通过时调用 submit(success=True, report=\"审查意见\")；"
+                "不通过时调用 submit(success=False, report=\"审查意见\")。"
                 "必须通过 submit 提交结论。",
             )
             await reviewer.send()
