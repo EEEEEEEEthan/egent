@@ -235,11 +235,13 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 submit_result = None
                 self.__developer.add_message(
                     "user",
-                    f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                    "开发完成后调用 submit(success=True, report=\"开发简报\")；"
-                    "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
-                    "必须通过 submit 提交结论。"
-                    "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与审查员传递信息。",
+                    (
+                        f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
+                        "开发完成后调用 submit(success=True, report=\"开发简报\")；"
+                        "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
+                        "必须通过 submit 提交结论。"
+                        "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与审查员传递信息。"
+                    ),
                 )
                 await self.__developer.send()
                 if submit_result is not None:
@@ -298,16 +300,18 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             submit_result = None
             reviewer.add_message(
                 "user",
-                f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
-                "审查通过时调用 submit(success=True, report=\"审查意见\")；"
-                "不通过时调用 submit(success=False, report=\"审查意见\")。"
-                "必须通过 submit 提交结论。"
-                "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与开发工程师传递信息。\n"
-                "checklist:\n"
-                "- 回归测试是否能覆盖到本次修改\n"
-                "- 是否符合项目规范\n"
-                "- 是否带来了不必要的修改\n"
-                "- 有没有更优雅的实现\n"
+                (
+                    f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
+                    "审查通过时调用 submit(success=True, report=\"审查意见\")；"
+                    "不通过时调用 submit(success=False, report=\"审查意见\")。"
+                    "必须通过 submit 提交结论。"
+                    "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与开发工程师传递信息。\n"
+                    "checklist:\n"
+                    "- 回归测试是否能覆盖到本次修改\n"
+                    "- 是否符合项目规范\n"
+                    "- 是否带来了不必要的修改\n"
+                    "- 有没有更优雅的实现\n"
+                ),
             )
             await reviewer.send()
             if submit_result is not None:
