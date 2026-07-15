@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -152,7 +151,7 @@ class Workflow:
             passed, comment = await self.__review()
             if passed:
                 self.__dev_log("审查通过,简报如下:", comment)
-                summary = self.__developer.send_message(
+                summary = await self.__developer.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.",
                 )
