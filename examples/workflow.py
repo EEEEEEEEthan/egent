@@ -266,13 +266,6 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             submit_result = (success, report)
             return "已提交"
 
-        def git_diff() -> str:
-            """查看代码变更 diff。返回工作区相对 HEAD 的全部变更（git diff HEAD）。"""
-            _, output = shell_tools.run_command("git", "diff", "HEAD")
-            if not output:
-                return "没有 diff（工作区干净，或没有可展示的变更）"
-            return output
-
         reviewer_system_prompt = (
             "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
             "你的队友是开发工程师 Leo，他负责编写代码。"
@@ -285,7 +278,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             name="Reviewer",
             settings="reviewer",
             system_prompt=reviewer_system_prompt,
-            tools=(submit, git_diff, *self.__blackboard_tools),
+            tools=(submit, *self.__blackboard_tools),
         )
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
             discoverable=DISCOVERABLE_RULE,
@@ -294,6 +287,12 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         )
         for _ in range(5):
             submit_result = None
+            diff_path = Path(f".egent/.temp/task-{self.task_id}-diff.txt")
+            diff_path.write_text(
+                shell_tools.run_command("git", "diff", "HEAD")[1]
+                or "没有 diff（工作区干净，或没有可展示的变更）",
+                encoding="utf-8",
+            )
             reviewer.add_message(
                 "user",
                 (
@@ -302,6 +301,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                     "不通过时调用 submit(success=False, report=\"审查意见\")。"
                     "必须通过 submit 提交结论。"
                     "可以用 __bt_read_blackboard 和 __bt_rewrite_blackboard 读写黑板，与开发工程师传递信息。\n"
+                    f"以下是当前代码变更 diff（git diff HEAD），见 {diff_path}，请读取。\n\n"
                     "checklist:\n"
                     "- 回归测试是否能覆盖到本次修改\n"
                     "- 是否符合项目规范\n"
