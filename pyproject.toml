@@ -1,6 +1,6 @@
 [project]
 name = "egent"
-version = "0.1.4"
+version = "0.1.5"
 description = "Chat Completions 多轮对话与工具调用封装"
 requires-python = ">=3.13"
 dependencies = [
@@ -39,7 +39,7 @@ ignore = ["PLR2004"]
 ban-relative-imports = "all"
 
 [tool.pylint.main]
-source-roots = ["src"]
+source-roots = ["src", "examples", "."]
 
 [tool.pylint."messages control"]
 disable = ["consider-using-from-import"]

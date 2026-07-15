@@ -5,5 +5,5 @@
         "**/.mypy_cache/": true,
         "**/.ruff_cache/": true,
     },
-    "pylint.args": ["--max-line-length=160", "--source-roots=src"]
+    "pylint.args": ["--max-line-length=160", "--source-roots=src,examples,."]
 }

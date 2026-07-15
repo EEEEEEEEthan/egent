@@ -8,9 +8,7 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import re
-import sys
 import traceback
 from pathlib import Path
 
@@ -22,21 +20,7 @@ import workflow
 import egent.agent
 import egent.builtin_tools.path_validator
 import egent.builtin_tools.test_tools
-
-
-def _hot_reload(leader):
-    """全工程 hot reload：按模块层级深度降序 reload 所有 egent 相关模块。"""
-    modules = sorted(
-        ((name.count("."), module) for name, module in sys.modules.items()
-         if name.startswith("egent.") or name in ("egent", "workflow", "shell_tools", "conversation_printer")),
-        key=lambda x: x[0], reverse=True,
-    )
-    for _, module in modules:
-        try:
-            importlib.reload(module)
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
-    leader.__class__ = egent.agent.Agent
+from examples import hot_reload
 
 
 async def run() -> int:
@@ -122,7 +106,7 @@ async def one_turn(leader: egent.agent.Agent) -> None:
         return
     leader.add_message("user", user_input)
     await leader.send()
-    _hot_reload(leader)
+    hot_reload(leader)
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(run()))
