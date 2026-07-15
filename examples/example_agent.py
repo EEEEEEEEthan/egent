@@ -91,7 +91,7 @@ async def run() -> int:
 
     leader = egent.agent.Agent(
         name="ethan",
-        settings="gpt5",
+        settings="leader",
         system_prompt=(
             "你是ethan，你是这个项目的主程\n"
             "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"

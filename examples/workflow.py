@@ -138,7 +138,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         )
         self.__developer = egent.agent.Agent(
             name="Leo",
-            settings="gpt5",
+            settings="coder",
             system_prompt=developer_system_prompt,
             tools=(submit, run_regression_test, *self.__blackboard_tools),
         )
@@ -283,7 +283,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         )
         reviewer = egent.agent.Agent(
             name="Reviewer",
-            settings="gpt5",
+            settings="reviewer",
             system_prompt=reviewer_system_prompt,
             tools=(submit, git_diff, *self.__blackboard_tools),
         )

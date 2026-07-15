@@ -27,12 +27,17 @@ pip install -e ".[dev]"
 在项目根目录创建 `.egent/.model.toml`：
 
 ```toml
-[gpt5-flash]
+[leader]
 url = "https://api.openai.com/v1"
 model = "gpt-4o-mini"
 apikey = "sk-xxxxxxxxxxxxxxxx"
 
-[gpt5]
+[coder]
+url = "https://api.openai.com/v1"
+model = "gpt-4o"
+apikey = "sk-xxxxxxxxxxxxxxxx"
+
+[reviewer]
 url = "https://api.openai.com/v1"
 model = "gpt-4o"
 apikey = "sk-xxxxxxxxxxxxxxxx"
