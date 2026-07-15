@@ -73,6 +73,7 @@ async def run() -> int:
         readable=workflow.READABLE_RULE,
         editable=workflow.NO_EDITABLE_RULE,
     )
+    leader.add_message("system", f"日志文件路径: {egent.agent.get_log_path()}")
     conversation_printer.ConversationPrinter(leader)
     while True:
         try:

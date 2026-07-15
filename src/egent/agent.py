@@ -39,12 +39,20 @@ _RETRYABLE_NETWORK_EXCEPTIONS: tuple[type[BaseException], ...] = (
     APIStatusError,
 )
 _logger = logging.getLogger(__name__)
+_log_path: str = ""  # pylint: disable=invalid-name
+
+
+def get_log_path() -> str:
+    """返回当前日志文件路径。"""
+    return _log_path
 
 
 def _configure_logging() -> None:
+    global _log_path  # pylint: disable=global-statement
     log_dir = pathlib.Path.cwd() / ".egent" / ".logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = str(log_dir / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+    _log_path = log_path
     if not any(
         isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == log_path
         for handler in _logger.handlers
