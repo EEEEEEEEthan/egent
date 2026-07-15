@@ -25,6 +25,15 @@ from examples import hot_reload
 
 async def run() -> int:
     """运行交互式聊天，返回进程退出码。"""
+    try:
+        while True:
+            chat()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 0
+
+async def chat():
+    """运行交互式聊天，返回进程退出码。"""
 
     async def develop(title: str, description: str) -> str:
         """开发
@@ -72,40 +81,34 @@ async def run() -> int:
         if version:
             return f"已提交 v{version}"
         return output or "git 提交成功"
-
+    leader = egent.agent.Agent(
+        name="ethan",
+        settings="leader",
+        system_prompt=(
+            "你是ethan，你是这个项目的主程\n"
+            "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
+            "如果他让你修改项目,你需要提出方案.你提出方案之后需要和他核对,在他明确表达可以开始执行了你才可以开始执行\n"
+            "你给出的方案应该措辞精炼,不要说废话.以最简洁的方式给出方案.\n"
+            f"执行修改请使用{develop.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
+        ),
+        tools=(develop, egent.builtin_tools.test_tools.run_regression_test, git_commit),
+    )
+    leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+        discoverable=workflow.DISCOVERABLE_RULE,
+        readable=workflow.READABLE_RULE,
+        editable=workflow.NO_EDITABLE_RULE,
+    )
+    leader.add_message("system", f"日志文件路径: {egent.agent.get_log_path()}")
+    conversation_printer.ConversationPrinter(leader)
     while True:
-        try:
-            leader = egent.agent.Agent(
-                name="ethan",
-                settings="leader",
-                system_prompt=(
-                    "你是ethan，你是这个项目的主程\n"
-                    "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
-                    "如果他让你修改项目,你需要提出方案.你提出方案之后需要和他核对,在他明确表达可以开始执行了你才可以开始执行\n"
-                    "你给出的方案应该措辞精炼,不要说废话.以最简洁的方式给出方案.\n"
-                    f"执行修改请使用{develop.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
-                ),
-                tools=(develop, egent.builtin_tools.test_tools.run_regression_test, git_commit),
-            )
-            leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
-                discoverable=workflow.DISCOVERABLE_RULE,
-                readable=workflow.READABLE_RULE,
-                editable=workflow.NO_EDITABLE_RULE,
-            )
-            leader.add_message("system", f"日志文件路径: {egent.agent.get_log_path()}")
-            conversation_printer.ConversationPrinter(leader)
-            while True:
-                user_input = input(">>> ").strip()
-                if not user_input:
-                    continue
-                if user_input == "/clear":
-                    break
-                leader.add_message("user", user_input)
-                await leader.send()
-                hot_reload(leader)
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
+        user_input = input(">>> ").strip()
+        if not user_input:
+            continue
+        if user_input == "/clear":
+            break
+        leader.add_message("user", user_input)
+        await leader.send()
+        hot_reload(leader)
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(run()))
