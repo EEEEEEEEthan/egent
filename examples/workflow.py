@@ -45,6 +45,8 @@ _CODING_PRINCIPLE = (
     "如果一个函数只用过一次，就应该内联到调用处，或者改成闭包定义在调用处内部。"
     "这样可以减少符号表负担，让代码更紧凑。"
     "当减少成员原则与linter冲突时，以减少成员原则为准。\n"
+    "【最佳实现原则】实现应该尽可能优雅,不要过度设计和过度封装.也不要执着于最小修改."
+    "如果重构可以带来更优雅的实现,应该优先考虑重构.\n"
 )
 
 
@@ -94,8 +96,8 @@ class Workflow:  # pylint: disable=too-few-public-methods
 
         developer_system_prompt = (
             "你是开发工程师，负责根据描述开发代码。"
-            "开发过程中可用 run_regression_test 验证与你本次改动相关的测试；"
-            "专注于自己的内容即可，提交后会自动进行全量回归测试。"
+            "开发过程中可用 run_regression_test 验证与你本次改动相关的测试."
+            "你需要跑的测试有pylint和你的修改对应的测试.提交后会自动进行全量回归测试。"
             + _CODING_PRINCIPLE
         )
         editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
@@ -262,7 +264,12 @@ class Workflow:  # pylint: disable=too-few-public-methods
                 f"需求文件在 {self.task_path}，请审查代码是否符合需求。"
                 "审查通过时调用 submit(success=True, report=\"审查意见\")；"
                 "不通过时调用 submit(success=False, report=\"审查意见\")。"
-                "必须通过 submit 提交结论。",
+                "必须通过 submit 提交结论。\n",
+                "checklist:\n"
+                "- 回归测试是否能覆盖到本次修改\n"
+                "- 是否符合项目规范\n"
+                "- 是否带来了不必要的修改\n"
+                "- 有没有更优雅的实现\n"
             )
             await reviewer.send()
             if submit_result is not None:
