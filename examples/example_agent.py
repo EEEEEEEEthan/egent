@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import traceback
 from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
@@ -34,7 +35,10 @@ async def run() -> int:
         try:
             success, report = await wf.start(description)
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            report = f"开发工作流异常：{type(exc).__name__}: {exc}"
+            report = (
+                f"开发工作流异常：{type(exc).__name__}: {exc}\n\n"
+                f"{traceback.format_exc()}"
+            )
             print(f"\033[31m{report}\033[0m")
             return report
         report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
