@@ -302,46 +302,9 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         return False, f'"{self.title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
 
 
-def reset_git_workspace() -> tuple[bool, str]:
-    """将工作区强制恢复为 HEAD 干净状态，返回 (success, output)。"""
-    reset_code, reset_output = shell_tools.run_command("git", "reset", "--hard", "HEAD")
-    clean_code, clean_output = shell_tools.run_command("git", "clean", "-fd")
-    output = "\n".join(part for part in (reset_output, clean_output) if part)
-    if not output:
-        output = "工作区已恢复为 HEAD 干净状态"
-    if reset_code != 0 or clean_code != 0:
-        return False, output
-    return True, output
-
-
 def run_regression_test() -> tuple[bool, str]:
     """跑 pytest 全量回归测试，返回 (passed, output)。"""
     passed, output = egent.builtin_tools.test_tools.execute_pytest(None)
     if passed:
         return True, ""
     return False, output
-
-
-async def begin_work_flow(
-    leader: egent.agent.Agent,
-    title: str,
-    description: str,
-) -> str:
-    """启动工作流
-    @param title: 工作流标题,几个单词即可
-    @param description: 工作流描述,务必精准且简练
-    """
-    wf = Workflow(leader, title)
-    try:
-        success, report = await wf.start(description)
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        report = f"开发工作流异常：{type(exc).__name__}: {exc}"
-        print(f"\033[31m{report}\033[0m")
-        return report
-    report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
-    if not success:
-        reset_ok, reset_output = reset_git_workspace()
-        if not reset_ok:
-            report += f"\n\ngit 恢复失败：\n{reset_output}"
-        report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
-    return report

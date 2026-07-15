@@ -28,7 +28,22 @@ async def run() -> int:
         @param description: 需求的描述,务必精准且完整.
         """
         nonlocal leader
-        return await workflow.begin_work_flow(leader, title, description)
+        wf = workflow.Workflow(leader, title)
+        try:
+            success, report = await wf.start(description)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            report = f"开发工作流异常：{type(exc).__name__}: {exc}"
+            print(f"\033[31m{report}\033[0m")
+            return report
+        report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
+        if not success:
+            _, reset_output = shell_tools.run_command("git", "reset", "--hard", "HEAD")
+            _, clean_output = shell_tools.run_command("git", "clean", "-fd")
+            git_output = "\n".join(part for part in (reset_output, clean_output) if part)
+            if git_output:
+                report += f"\n\n{git_output}"
+            report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
+        return report
 
     def git_commit(commit_message: str) -> str:
         """将所有变更加入暂存区并提交。
