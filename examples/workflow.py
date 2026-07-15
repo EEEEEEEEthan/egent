@@ -110,7 +110,7 @@ class Workflow:
                 reg_passed, reg_output = self.__regression_test()
                 if reg_passed:
                     break
-                print(f"{blue}回归测试未通过{reset}")
+                print(f"{blue}回归测试未通过{reset}{reg_output}")
                 self.__developer.add_message(
                     "user",
                     f"回归测试未通过，请修复：\n{reg_output}",
