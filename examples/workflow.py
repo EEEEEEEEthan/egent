@@ -108,12 +108,9 @@ class Workflow:
         if content:
             print(content)
 
-    def __with_dev_log(self, result: str) -> str:
-        return f"{result}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
-
     async def start(self, description: str) -> str:
         success, report = await self.__start(description)
-        report = self.__with_dev_log(report)
+        report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
         if not success:
             report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
         return report
