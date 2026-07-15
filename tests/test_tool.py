@@ -31,8 +31,8 @@ def test_as_builtin_tool_prefixes_name() -> None:
     wrapped = egent.tool.as_builtin_tool(add_numbers)
     schema = egent.tool.tool_from_function(wrapped)
 
-    assert wrapped.__name__ == "__add_numbers"
-    assert schema["function"]["name"] == "__add_numbers"
+    assert wrapped.__name__ == "__add_numbers__"
+    assert schema["function"]["name"] == "__add_numbers__"
 
 
 def test_as_builtin_tool_preserves_end_conversation() -> None:
@@ -45,7 +45,7 @@ def test_as_builtin_tool_preserves_end_conversation() -> None:
     wrapped = egent.tool.as_builtin_tool(finish)
     _, _, conversation_terminating_tool_names = egent.tool.resolve_tools([wrapped])
 
-    assert conversation_terminating_tool_names == frozenset({"__finish"})
+    assert conversation_terminating_tool_names == frozenset({"__finish__"})
 
 
 def test_tool_from_function_schema() -> None:

@@ -12,9 +12,9 @@ import asyncio
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
 
 import conversation_printer
+import workflow
 import egent.agent
 import egent.builtin_tools.path_validator
-import workflow
 
 
 async def run() -> int:

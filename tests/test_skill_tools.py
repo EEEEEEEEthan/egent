@@ -133,7 +133,7 @@ def test_agent_injects_skill_catalog(tmp_path, monkeypatch) -> None:
     assert agent._Agent__messages[0]["role"] == "system"
     assert "demo: 演示技能" in agent._Agent__messages[0]["content"]
     tool_names = {tool["function"]["name"] for tool in agent._Agent__api_tools}
-    assert {"__learn_skill", "__run_skill_script"}.issubset(tool_names)
+    assert {"__learn_skill__", "__run_skill_script__"}.issubset(tool_names)
 
 
 def test_skill_tools_register_with_resolve_tools(tmp_path) -> None:

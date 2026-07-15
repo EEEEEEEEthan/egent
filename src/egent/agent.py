@@ -171,6 +171,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         if system_sections:
             self.__add_message("system", "\n\n".join(system_sections))
 
+    # pylint: disable=protected-access,invalid-name,no-member,attribute-defined-outside-init,unused-private-member
     def __copy__(self) -> Agent:
         cloned = Agent(
             settings=self.__settings,
@@ -181,7 +182,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         )
         cloned.__messages = deepcopy(self.__messages)
         cloned.path_permissions = self.path_permissions
-        cloned._Agent__path_permissions_text = self._Agent__path_permissions_text  # pylint: disable=protected-access
+        cloned._Agent__path_permissions_text = self._Agent__path_permissions_text
         return cloned
 
     def add_listener(self, listener: Callable[[AgentEvent], None]) -> None:
@@ -294,7 +295,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 if function_name in self.__conversation_terminating_tool_names:
                     conversation_terminating_tool_name = function_name
             if conversation_terminating_tool_name is not None:
-                reply_text = ""
+                reply_text = f"使用了{conversation_terminating_tool_name}"
                 self.__emit_event(TurnCompleted(reply_text))
                 return reply_text
 

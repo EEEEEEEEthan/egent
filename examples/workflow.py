@@ -112,6 +112,12 @@ class Workflow:
         success, report = await self.__start(description)
         report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
         if not success:
+            reset_ok, reset_output = reset_git_workspace()
+            if reset_ok:
+                self.__dev_log("工作流失败，已强制恢复 git 工作区", reset_output)
+            else:
+                self.__dev_log("工作流失败，git 恢复失败", reset_output)
+                report += f"\n\ngit 恢复失败：\n{reset_output}"
             report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
         return report
 
@@ -246,6 +252,35 @@ class Workflow:
             if submit_result is not None:
                 return submit_result
         return False, f'"{self.title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
+
+
+def reset_git_workspace() -> tuple[bool, str]:
+    """将工作区强制恢复为 HEAD 干净状态，返回 (success, output)。"""
+    cwd = Path.cwd()
+    try:
+        reset = subprocess.run(
+            ["git", "reset", "--hard", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+        clean = subprocess.run(
+            ["git", "clean", "-fd"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+    except OSError as error:
+        return False, str(error)
+    outputs = [
+        part.strip()
+        for part in (reset.stdout, reset.stderr, clean.stdout, clean.stderr)
+        if part.strip()
+    ]
+    output = "\n".join(outputs) if outputs else "工作区已恢复为 HEAD 干净状态"
+    if reset.returncode != 0 or clean.returncode != 0:
+        return False, output
+    return True, output
 
 
 def run_regression_test() -> tuple[bool, str]:
