@@ -5,6 +5,7 @@ from __future__ import annotations
 import shlex
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 import egent.builtin_tools.command_utils
@@ -23,8 +24,8 @@ def execute_pytest(targets: list[str] | None = None) -> tuple[bool, str]:
             cwd=Path.cwd(),
             check=False,
         )
-    except OSError as error:
-        return False, str(error)
+    except OSError:
+        return False, traceback.format_exc().rstrip("\n")
     output = egent.builtin_tools.command_utils.format_command_result(
         result.stdout,
         result.stderr,

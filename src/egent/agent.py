@@ -6,6 +6,7 @@ import asyncio
 import logging
 import pathlib
 import re
+import traceback
 import uuid
 from collections.abc import Awaitable, Callable, Iterable
 from copy import deepcopy
@@ -291,8 +292,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                     handler_result = handler(function_arguments)
                     if isinstance(handler_result, Awaitable):
                         handler_result = await handler_result
-                except Exception as exception:  # pylint: disable=broad-exception-caught
-                    handler_result = str(exception)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    handler_result = traceback.format_exc().rstrip("\n")
                     is_exception = True
                 tool_message = self.__add_message(
                     "tool",
