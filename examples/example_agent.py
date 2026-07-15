@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
 
@@ -49,11 +51,21 @@ async def run() -> int:
         """将所有变更加入暂存区并提交。
         @param commit_message: 提交信息
         """
+        version = None
+        path = Path("pyproject.toml")
+        text = path.read_text(encoding="utf-8")
+        match = re.search(r'^version = "(\d+)\.(\d+)\.(\d+)"', text, re.MULTILINE)
+        if match:
+            major, minor, patch = match.group(1), match.group(2), int(match.group(3)) + 1
+            version = f"{major}.{minor}.{patch}"
+            path.write_text(text[: match.start()] + f'version = "{version}"' + text[match.end() :], encoding="utf-8")
         _, add_output = shell_tools.run_command("git", "add", "-A")
         returncode, commit_output = shell_tools.run_command("git", "commit", "-m", commit_message)
         output = "\n".join(part for part in (add_output, commit_output) if part)
         if returncode != 0:
             return f"git 提交失败：\n{output}"
+        if version:
+            return f"已提交 v{version}"
         return output or "git 提交成功"
 
     leader = egent.agent.Agent(
