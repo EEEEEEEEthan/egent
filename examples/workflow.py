@@ -136,7 +136,11 @@ class Workflow:  # pylint: disable=too-few-public-methods
 
     async def start(self, description: str) -> str:
         """按描述启动开发工作流，返回最终报告。"""
-        success, report = await self.__start(description)
+        try:
+            success, report = await self.__start(description)
+        except Exception as exc:
+            report = f"开发工作流异常：{type(exc).__name__}: {exc}"
+            return report
         report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
         if not success:
             reset_ok, reset_output = reset_git_workspace()
