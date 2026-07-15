@@ -127,6 +127,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
             "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
             + _CODING_PRINCIPLE
+            + "编码完成后会有代码整理环节，届时直接输出即可，无需调用 submit。\n"
         )
         editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=(f"{_WORKING_DIRECTORY}/*",),
@@ -174,6 +175,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                     self.__dev_log("需求被打回,理由如下:", coding_report)
                     return False, coding_report
                 self.__dev_log("编码完成,简报如下:", coding_report)
+                await self.__tidy_code()
                 self.__dev_log("开始回归测试")
                 reg_passed, reg_output = run_regression_test()
                 if reg_passed:
@@ -238,6 +240,17 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             return False, f'"{self.title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
         finally:
             self.__coding_submit_hook = None
+
+    async def __tidy_code(self) -> None:
+        """让 developer 整理刚写的代码，优化但不改变功能行为。"""
+        self.__dev_log("开始代码整理")
+        tidy_report = await self.__developer.send_message(
+            "user",
+            "刚才的编码已完成。现在请按照编码原则（最小域原则、减少成员原则、最佳实现原则、私有方法命名原则）"
+            "整理你刚才写的代码，使其更优雅紧凑，但不改变功能行为。"
+            "直接输出整理说明即可，不需要调用 submit。",
+        )
+        self.__dev_log("代码整理完成,简报如下:", tidy_report)
 
     async def __review(self) -> tuple[bool, str]:
         """审查开发成果，返回 (passed, comment)。"""
