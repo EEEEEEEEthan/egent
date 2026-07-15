@@ -64,7 +64,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
         def submit(success: bool, report: str) -> str:
             """提交开发结论并结束本轮对话。打回并不羞耻! 请大胆打回.以下情况应当打回:回归测试存在既有原因无法通过;需求不清晰;代码脏乱建议先重构等
             @param success: True 表示开发完成，False 表示打回
-            @param report: 如果完成,填一个减号即可.在后续流程通过之后你还会采访你;如果打回,请说明理由
+            @param report: 如果完成,填写开发简报;如果打回,请说明理由
             """
             if self.__coding_submit_hook is None:
                 raise RuntimeError("当前不在编码流程中，不能调用 submit")
@@ -135,6 +135,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
                 if not success:
                     self.__dev_log("需求被打回,理由如下:", coding_report)
                     return False, coding_report
+                self.__dev_log("编码完成,简报如下:", coding_report)
                 self.__dev_log("开始回归测试")
                 reg_passed, reg_output = run_regression_test()
                 if reg_passed:
@@ -180,7 +181,7 @@ class Workflow:  # pylint: disable=too-few-public-methods
                 self.__developer.add_message(
                     "user",
                     f"需求文件在 {self.task_path}，请读取后开始开发。注意：你无权编辑该需求文件。"
-                    "开发完成后调用 submit(success=True, report=\"-\")；"
+                    "开发完成后调用 submit(success=True, report=\"开发简报\")；"
                     "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
                     "必须通过 submit 提交结论。",
                 )
