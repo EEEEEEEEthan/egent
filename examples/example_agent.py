@@ -25,7 +25,7 @@ async def run() -> int:
     async def begin_work_flow(title: str, description: str) -> str:
         """启动工作流
         @param title: 工作流标题,几个单词即可
-        @param description: 工作流描述,务必精准
+        @param description: 需求的描述,务必精准且完整.
         """
         nonlocal leader
         return await workflow.begin_work_flow(leader, title, description)
