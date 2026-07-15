@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -164,12 +165,15 @@ class Workflow:
 
     def __regression_test(self) -> tuple[bool, str]:
         """跑 pytest 全量回归测试，返回 (passed, output)。"""
-        result = subprocess.run(
-            ["pytest"],
-            capture_output=True,
-            text=True,
-            cwd=Path.cwd(),
-        )
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pytest"],
+                capture_output=True,
+                text=True,
+                cwd=Path.cwd(),
+            )
+        except OSError as error:
+            return False, str(error)
         if result.returncode != 0:
             output = (result.stdout + "\n" + result.stderr).strip()
             return False, output
