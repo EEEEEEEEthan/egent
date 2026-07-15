@@ -146,7 +146,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             editable=editable_rule,
         )
 
-    def __dev_log(self, title: str, content: str = "") -> None:
+    def _dev_log(self, title: str, content: str = "") -> None:
         with Path(self.log_path).open("a", encoding="utf-8") as log_file:
             log_file.write(title)
             log_file.write("\n")
@@ -160,42 +160,24 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if content:
             print(content)
 
-    async def start(self, description: str) -> str:
-        """按描述启动开发工作流，返回最终报告。"""
-        try:
-            success, report = await self.__start(description)
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            report = f"开发工作流异常：{type(exc).__name__}: {exc}"
-            self.__dev_log(report)
-            return report
-        report = f"{report}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
-        if not success:
-            reset_ok, reset_output = reset_git_workspace()
-            if reset_ok:
-                self.__dev_log("工作流失败，已强制恢复 git 工作区", reset_output)
-            else:
-                self.__dev_log("工作流失败，git 恢复失败", reset_output)
-                report += f"\n\ngit 恢复失败：\n{reset_output}"
-            report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
-        return report
-
-    async def __start(self, description: str) -> tuple[bool, str]:
+    async def start(self, description: str) -> tuple[bool, str]:
+        """按描述启动开发工作流，返回 (成功与否, 报告)。"""
         Path(self.task_path).write_text(description, encoding="utf-8")
         Path(self.log_path).write_text("", encoding="utf-8")
-        self.__dev_log(f"开始开发工作流: {self.title}", description)
+        self._dev_log(f"开始开发工作流: {self.title}", description)
         for _ in range(10):
             for _ in range(10):
-                self.__dev_log("开始编码")
+                self._dev_log("开始编码")
                 success, coding_report = await self.__coding()
                 if not success:
-                    self.__dev_log("需求被打回,理由如下:", coding_report)
+                    self._dev_log("需求被打回,理由如下:", coding_report)
                     return False, coding_report
-                self.__dev_log("编码完成,简报如下:", coding_report)
-                self.__dev_log("开始回归测试")
+                self._dev_log("编码完成,简报如下:", coding_report)
+                self._dev_log("开始回归测试")
                 reg_passed, reg_output = run_regression_test()
                 if reg_passed:
                     break
-                self.__dev_log("回归测试未通过", reg_output)
+                self._dev_log("回归测试未通过", reg_output)
                 self.__developer.add_message(
                     "user",
                     f"回归测试未通过，请修复：\n{reg_output}",
@@ -204,17 +186,17 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 return False, (
                     f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
                 )
-            self.__dev_log("开始审查")
+            self._dev_log("开始审查")
             passed, comment = await self.__review()
             if passed:
-                self.__dev_log("审查通过,简报如下:", comment)
+                self._dev_log("审查通过,简报如下:", comment)
                 summary = await self.__developer.send_message(
                     "user",
-                    "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.",
+                    "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.(直接输出即可,不要使用submit工具)",
                 )
-                self.__dev_log("开发工作简报如下:", summary)
+                self._dev_log("开发工作简报如下:", summary)
                 return True, summary
-            self.__dev_log("审查未通过,审查意见如下:", comment)
+            self._dev_log("审查未通过,审查意见如下:", comment)
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
@@ -348,4 +330,20 @@ async def begin_work_flow(
     @param title: 工作流标题,几个单词即可
     @param description: 工作流描述,务必精准且简练
     """
-    return await Workflow(leader, title).start(description)
+    wf = Workflow(leader, title)
+    try:
+        success, report = await wf.start(description)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        report = f"开发工作流异常：{type(exc).__name__}: {exc}"
+        wf._dev_log(report)  # pylint: disable=protected-access
+        return report
+    report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
+    if not success:
+        reset_ok, reset_output = reset_git_workspace()
+        if reset_ok:
+            wf._dev_log("工作流失败，已强制恢复 git 工作区", reset_output)  # pylint: disable=protected-access
+        else:
+            wf._dev_log("工作流失败，git 恢复失败", reset_output)  # pylint: disable=protected-access
+            report += f"\n\ngit 恢复失败：\n{reset_output}"
+        report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."
+    return report

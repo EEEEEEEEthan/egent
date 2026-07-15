@@ -22,8 +22,8 @@ import egent.builtin_tools.test_tools
 async def run() -> int:
     """运行交互式聊天，返回进程退出码。"""
 
-    async def begin_work_flow(title: str, description: str) -> str:
-        """启动工作流
+    async def develop(title: str, description: str) -> str:
+        """开发
         @param title: 工作流标题,几个单词即可
         @param description: 需求的描述,务必精准且完整.
         """
@@ -49,9 +49,9 @@ async def run() -> int:
             "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
             "如果他让你修改项目,你需要提出方案.你提出方案之后需要和他核对,在他明确表达可以开始执行了你才可以开始执行\n"
             "你给出的方案应该措辞精炼,不要说废话.以最简洁的方式给出方案.\n"
-            f"执行修改请使用{begin_work_flow.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
+            f"执行修改请使用{develop.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
         ),
-        tools=(begin_work_flow, egent.builtin_tools.test_tools.run_regression_test, git_commit),
+        tools=(develop, egent.builtin_tools.test_tools.run_regression_test, git_commit),
     )
     leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
         discoverable=workflow.DISCOVERABLE_RULE,
