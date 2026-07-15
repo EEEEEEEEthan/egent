@@ -125,8 +125,8 @@ class Workflow:
         Path(self.task_path).write_text(description, encoding="utf-8")
         Path(self.log_path).write_text("", encoding="utf-8")
         self.__dev_log(f"开始开发工作流: {self.title}", description)
-        for _ in range(5):
-            for _ in range(5):
+        for _ in range(10):
+            for _ in range(10):
                 self.__dev_log("开始编码")
                 success, coding_report = await self.__coding()
                 if not success:
