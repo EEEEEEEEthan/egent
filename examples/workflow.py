@@ -55,9 +55,9 @@ class Workflow:
         self.title = title
         task_dir = Path(".egent/.temp")
         task_dir.mkdir(parents=True, exist_ok=True)
-        task_id = uuid.uuid4().hex[:8]
-        task_file = task_dir / f"task-{task_id}.txt"
-        self.task_path = task_file.as_posix()
+        self.task_id = uuid.uuid4().hex[:8]
+        self.task_path = (task_dir / f"task-{self.task_id}.txt").as_posix()
+        self.log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
 
         @egent.tool.end_conversation
@@ -94,42 +94,78 @@ class Workflow:
             editable=editable_rule,
         )
 
+    def __dev_log(self, message: str, *, highlight: bool = False) -> None:
+        with Path(self.log_path).open("a", encoding="utf-8") as log_file:
+            log_file.write(message)
+            if not message.endswith("\n"):
+                log_file.write("\n")
+        if highlight:
+            blue = "\033[34m"
+            reset = "\033[0m"
+            print(f"{blue}{message}{reset}")
+        else:
+            print(message)
+
+    def __with_dev_log(self, result: str) -> str:
+        return f"{result}\n\n开发日志见.egent/.temp/task-{self.task_id}.log"
+
     async def start(self, description: str) -> str:
-        blue = "\033[34m"
-        reset = "\033[0m"
         Path(self.task_path).write_text(description, encoding="utf-8")
-        print(f"{blue}开始开发工作流{reset}: {self.title}\n{description}")
+        Path(self.log_path).write_text("", encoding="utf-8")
+        self.__dev_log(
+            f"开始开发工作流: {self.title}\n{description}",
+            highlight=True,
+        )
         for _ in range(5):
             for _ in range(5):
-                print(f"{blue}开始编码{reset}")
+                self.__dev_log("开始编码", highlight=True)
                 success, coding_report = await self.__coding()
                 if not success:
-                    print(f"{blue}编码打回{reset},理由如下:\n{coding_report}")
-                    return coding_report
-                print(f"{blue}开始回归测试{reset}")
+                    self.__dev_log(
+                        f"编码打回,理由如下:\n{coding_report}",
+                        highlight=True,
+                    )
+                    return self.__with_dev_log(coding_report)
+                self.__dev_log("开始回归测试", highlight=True)
                 reg_passed, reg_output = self.__regression_test()
                 if reg_passed:
                     break
-                print(f"{blue}回归测试未通过{reset}{reg_output}")
+                self.__dev_log(
+                    f"回归测试未通过{reg_output}",
+                    highlight=True,
+                )
                 self.__developer.add_message(
                     "user",
                     f"回归测试未通过，请修复：\n{reg_output}",
                 )
             else:
-                return f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
-            print(f"{blue}开始审查{reset}")
+                return self.__with_dev_log(
+                    f'"{self.title}"开发工作因为回归测试在5次编码尝试后仍未通过而失败了'
+                )
+            self.__dev_log("开始审查", highlight=True)
             passed, comment = await self.__review()
             if passed:
-                print(f"{blue}审查通过{reset},简报如下:\n{comment}")
-                summary = self.__developer.send_message("user", "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.")
-                print(f"{blue}开发工作简报如下:\n{summary}")
-                return summary
-            print(f"{blue}审查未通过{reset},审查意见如下:\n{comment}")
+                self.__dev_log(
+                    f"审查通过,简报如下:\n{comment}",
+                    highlight=True,
+                )
+                summary = self.__developer.send_message(
+                    "user",
+                    "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.",
+                )
+                self.__dev_log(f"开发工作简报如下:\n{summary}")
+                return self.__with_dev_log(summary)
+            self.__dev_log(
+                f"审查未通过,审查意见如下:\n{comment}",
+                highlight=True,
+            )
             self.__developer.add_message(
                 "user",
                 f"审查未通过，审查意见如下：\n{comment}\n请根据意见修改代码。",
             )
-        return f'"{self.title}"开发工作因为超过最大审查轮次而失败了'
+        return self.__with_dev_log(
+            f'"{self.title}"开发工作因为超过最大审查轮次而失败了'
+        )
 
     async def __coding(self) -> tuple[bool, str]:
         """根据描述执行开发工作并返回简报。"""
