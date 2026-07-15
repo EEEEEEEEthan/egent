@@ -143,8 +143,8 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
 
     tool_names = {tool_schema["function"]["name"] for tool_schema in agent._Agent__api_tools}
 
-    assert "__read_file__" in tool_names
-    assert "__create_file__" in tool_names
+    assert "__bt_read_file" in tool_names
+    assert "__bt_create_file" in tool_names
 
 
 @pytest.mark.asyncio

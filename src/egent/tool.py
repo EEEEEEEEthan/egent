@@ -33,8 +33,8 @@ def end_conversation(function: ToolCallable) -> ToolCallable:
 
 
 def as_builtin_tool(function: ToolCallable) -> ToolCallable:
-    """将内置工具注册名强制为双下划线开头与结尾，与用户自定义工具区分。"""
-    canonical_name = f"__{function.__name__.strip('_')}__"
+    """将内置工具注册名强制为 __bt_ 前缀格式，与用户自定义工具区分。"""
+    canonical_name = f"__bt_{function.__name__.strip('_')}"
     if function.__name__ == canonical_name:
         return function
 

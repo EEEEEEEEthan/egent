@@ -223,7 +223,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                         "开发完成后调用 submit(success=True, report=\"开发简报\")；"
                         "若无法完成或需求不够明确，调用 submit(success=False, report=\"理由\")。"
                         "必须通过 submit 提交结论。"
-                        "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与审查员传递信息。"
+                        "可以用 __bt_read_blackboard 和 __bt_rewrite_blackboard 读写黑板，与审查员传递信息。"
                     ),
                 )
                 await self.__developer.send()
@@ -288,7 +288,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                     "审查通过时调用 submit(success=True, report=\"审查意见\")；"
                     "不通过时调用 submit(success=False, report=\"审查意见\")。"
                     "必须通过 submit 提交结论。"
-                    "可以用 __read_blackboard__ 和 __rewrite_blackboard__ 读写黑板，与开发工程师传递信息。\n"
+                    "可以用 __bt_read_blackboard 和 __bt_rewrite_blackboard 读写黑板，与开发工程师传递信息。\n"
                     "checklist:\n"
                     "- 回归测试是否能覆盖到本次修改\n"
                     "- 是否符合项目规范\n"

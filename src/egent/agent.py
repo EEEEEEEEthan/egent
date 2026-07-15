@@ -282,10 +282,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 try:
                     handler = self.__tool_handlers.get(function_name)
                     if handler is None:
-                        if function_name.startswith("__") and not function_name.endswith("__"):
+                        if function_name.startswith("__bt_"):
                             raise ValueError(
                                 f"工具未注册: {function_name}"
-                                f"（内置工具须为 __{function_name.strip('_')}__ 格式）",
+                                f"（内置工具须为 __bt_ 前缀格式）",
                             )
                         raise ValueError(f"工具未注册: {function_name}")
                     handler_result = handler(function_arguments)
@@ -422,7 +422,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         """构建技能索引与 system 摘要，单次读取各 SKILL.md。"""
         index: dict[str, pathlib.Path] = {}
         seen_ids: dict[str, int] = {}
-        catalog_lines = ["可用技能（使用 __learn_skill__ 查看详情，__run_skill_script__ 运行脚本）:"]
+        catalog_lines = ["可用技能（使用 __bt_learn_skill 查看详情，__bt_run_skill_script 运行脚本）:"]
         for raw_path in skill_paths:
             resolved = pathlib.Path(raw_path).resolve()
             skill_dir = resolved.parent if resolved.name == "SKILL.md" and resolved.is_file() else resolved

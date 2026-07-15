@@ -27,12 +27,12 @@ async def echo_async(message: str) -> str:
 
 
 def test_as_builtin_tool_prefixes_name() -> None:
-    """as_builtin_tool 应将注册名改为双下划线开头与结尾。"""
+    """as_builtin_tool 应将注册名改为 __bt_ 前缀格式。"""
     wrapped = egent.tool.as_builtin_tool(add_numbers)
     schema = egent.tool.tool_from_function(wrapped)
 
-    assert wrapped.__name__ == "__add_numbers__"
-    assert schema["function"]["name"] == "__add_numbers__"
+    assert wrapped.__name__ == "__bt_add_numbers"
+    assert schema["function"]["name"] == "__bt_add_numbers"
 
 
 def test_as_builtin_tool_preserves_end_conversation() -> None:
@@ -45,11 +45,11 @@ def test_as_builtin_tool_preserves_end_conversation() -> None:
     wrapped = egent.tool.as_builtin_tool(finish)
     _, _, conversation_terminating_tool_names = egent.tool.resolve_tools([wrapped])
 
-    assert conversation_terminating_tool_names == frozenset({"__finish__"})
+    assert conversation_terminating_tool_names == frozenset({"__bt_finish"})
 
 
 def test_as_builtin_tool_normalizes_partial_dunder_name() -> None:
-    """as_builtin_tool 应将仅单侧双下划线的函数名规范为 __name__。"""
+    """as_builtin_tool 应将仅单侧双下划线的函数名规范为 __bt_ 前缀。"""
     def __read_file(path: str) -> str:
         """读取文件。
 
@@ -60,8 +60,8 @@ def test_as_builtin_tool_normalizes_partial_dunder_name() -> None:
     wrapped = egent.tool.as_builtin_tool(__read_file)
     schema = egent.tool.tool_from_function(wrapped)
 
-    assert wrapped.__name__ == "__read_file__"
-    assert schema["function"]["name"] == "__read_file__"
+    assert wrapped.__name__ == "__bt_read_file"
+    assert schema["function"]["name"] == "__bt_read_file"
 
 
 def test_tool_from_function_schema() -> None:
