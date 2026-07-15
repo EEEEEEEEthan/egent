@@ -85,7 +85,8 @@ class Workflow:  # pylint: disable=too-few-public-methods
 
         @egent.tool.end_conversation
         def submit(success: bool, report: str) -> str:
-            """提交开发结论并结束本轮对话。打回并不羞耻! 请大胆打回.以下情况应当打回:回归测试存在既有原因无法通过;需求不清晰;代码脏乱建议先重构等
+            """提交开发结论并结束本轮对话。打回并不羞耻! 请大胆打回.
+            应当打回的情况包括但不限于:回归测试无法通过不是我造成的;需求不够清晰;代码脏乱建议先重构;审查标准与需求冲突等等.
             @param success: True 表示开发完成，False 表示打回
             @param report: 如果完成,填写开发简报;如果打回,请说明理由
             """
