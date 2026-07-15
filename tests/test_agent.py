@@ -307,12 +307,16 @@ async def test_send_runs_all_tool_calls_before_conversation_terminating_tool(mon
     agent = egent.agent.Agent(settings="test", tools=[note_step, finish_task])
     fetch_count = 0
 
-    class FakeToolCall:
+    class FakeToolCall:  # pylint: disable=too-few-public-methods
+        """测试用 tool_call 桩对象。"""
+
         def __init__(self, call_id: str, name: str, arguments: str) -> None:
+            """构造桩 tool_call。"""
             self.id = call_id
             self.function = SimpleNamespace(name=name, arguments=arguments)
 
         def model_dump(self) -> dict[str, object]:
+            """序列化为 Chat Completions tool_call 字典。"""
             return {
                 "id": self.id,
                 "function": {
