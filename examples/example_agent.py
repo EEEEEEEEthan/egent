@@ -93,15 +93,18 @@ async def run() -> int:
     conversation_printer.ConversationPrinter(leader)
     while True:
         try:
-            user_input = input(">>> ").strip()
+            await one_turn(leader)
         except (EOFError, KeyboardInterrupt):
             print()
             return 0
-        if not user_input:
-            continue
-        leader.add_message("user", user_input)
-        await leader.send()
 
+async def one_turn(leader: egent.agent.Agent) -> None:
+    """一次对话"""
+    user_input = input(">>> ").strip()
+    if not user_input:
+        return
+    leader.add_message("user", user_input)
+    await leader.send()
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(run()))
