@@ -62,9 +62,9 @@ class Workflow:
 
         @egent.tool.end_conversation
         def submit(success: bool, report: str) -> str:
-            """提交开发结论并结束本轮对话。
-            @param success: True 表示开发完成，False 表示打回（无法完成或需求不明）
-            @param report: 完成简报，或打回理由
+            """提交开发结论并结束本轮对话。打回并不羞耻! 请大胆打回.以下情况应当打回:回归测试存在既有原因无法通过;需求不清晰;代码脏乱建议先重构等
+            @param success: True 表示开发完成，False 表示打回
+            @param report: 如果完成,填一个减号即可.在后续流程通过之后你还会采访你;如果打回,请说明理由
             """
             if self.__coding_submit_hook is None:
                 raise RuntimeError("当前不在编码流程中，不能调用 submit")
