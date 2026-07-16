@@ -285,7 +285,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
             usage = getattr(completion, 'usage', None)
             if usage is not None:
-                self.__tokens = usage.prompt_tokens
+                self.__tokens = usage.total_tokens
             message = completion.choices[0].message
             reply_text = (message.content or "").strip()
             tool_calls = message.tool_calls or []
