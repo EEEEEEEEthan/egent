@@ -34,7 +34,7 @@ class MemoryToolSet:
         return f"已创建记忆：{title}"
 
     def memory_recall(self, pattern: str) -> str:
-        """正则搜索记忆目录下所有 .md 文件名+内容，返回匹配列表。
+        """正则搜索记忆目录下所有内容，返回匹配列表。
 
         @param pattern 正则表达式
         """
