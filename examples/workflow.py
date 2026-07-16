@@ -193,6 +193,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             passed, comment = await self.__review()
             if passed:
                 self.__dev_log("审查通过,简报如下:", comment)
+                shell_tools.run_command("git", "add", "-A")
                 summary = await self.__coder.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.(直接输出即可,不要使用submit工具)",
@@ -289,7 +290,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             submit_result = None
             diff_path = Path(f".egent/.temp/task-{self.task_id}-diff.txt")
             diff_path.write_text(
-                shell_tools.run_command("git", "diff", "HEAD")[1]
+                shell_tools.run_command("git", "diff")[1]
                 or "没有 diff（工作区干净，或没有可展示的变更）",
                 encoding="utf-8",
             )
@@ -301,7 +302,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                     "不通过时调用 submit(success=False, report=\"审查意见\")。"
                     "必须通过 submit 提交结论。"
                     "可以用 __bt_read_blackboard 和 __bt_rewrite_blackboard 读写黑板，与开发工程师传递信息。\n"
-                    f"以下是当前代码变更 diff（git diff HEAD），见 {diff_path}，请读取。\n\n"
+                    f"以下是当前代码变更 diff（git diff），见 {diff_path}，请读取。\n\n"
                     "checklist:\n"
                     "- 回归测试是否能覆盖到本次修改\n"
                     "- 是否符合项目规范\n"

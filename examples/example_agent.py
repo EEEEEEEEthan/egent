@@ -62,7 +62,7 @@ async def chat():
         return report
 
     def git_commit(commit_message: str) -> str:
-        """将所有变更加入暂存区并提交。
+        """提交变更。
         @param commit_message: 提交信息
         """
         version = None
@@ -73,14 +73,12 @@ async def chat():
             major, minor, patch = match.group(1), match.group(2), int(match.group(3)) + 1
             version = f"{major}.{minor}.{patch}"
             path.write_text(text[: match.start()] + f'version = "{version}"' + text[match.end() :], encoding="utf-8")
-        _, add_output = shell_tools.run_command("git", "add", "-A")
-        returncode, commit_output = shell_tools.run_command("git", "commit", "-m", commit_message)
-        output = "\n".join(part for part in (add_output, commit_output) if part)
+        returncode, commit_output = shell_tools.run_command("git", "commit", "-a", "-m", commit_message)
         if returncode != 0:
-            return f"git 提交失败：\n{output}"
+            return f"git 提交失败：\n{commit_output or ''}"
         if version:
             return f"已提交 v{version}"
-        return output or "git 提交成功"
+        return commit_output or "git 提交成功"
     leader = egent.agent.Agent(
         name="ethan",
         settings="leader",
