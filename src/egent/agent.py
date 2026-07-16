@@ -495,6 +495,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 model=self.model,
                 messages=self.__messages,
                 tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
+                stream_options={"include_usage": True},
             ) as stream:
                 async for event in stream:
                     if event.type == "content.delta":
