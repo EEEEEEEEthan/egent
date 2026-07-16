@@ -334,7 +334,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         if not rest:
             return ""
 
-        summary = await self.send_message("user", "帮我摘要")
+        summary = await self.send_message("user", "请将以上对话历史压缩为简洁摘要，保留关键决策、已完成工作、当前代码状态与待解决问题。")
         self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"此前工作摘要:\n{summary}")
         return summary
