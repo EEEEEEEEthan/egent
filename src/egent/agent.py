@@ -150,6 +150,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__is_busy = False
         self.__busy_condition = asyncio.Condition()
         self.__event_listeners: list[Callable[[AgentEvent], None]] = []
+        self.__tokens: int = 0
         skill_index, skill_catalog = self.__build_skills(skills)
         (
             self.__api_tools,
@@ -216,6 +217,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         self.__file_system_tool_set.path_permissions = value
 
     @property
+    def tokens(self) -> int:
+        """当前会话占用的上下文 tokens。"""
+        return self.__tokens
+
+    @property
     def busy(self) -> bool:
         """是否正在 send。"""
         return self.__is_busy
@@ -257,6 +263,9 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         while True:
             self.__sync_path_permissions_notice()
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
+            usage = getattr(completion, 'usage', None)
+            if usage is not None:
+                self.__tokens = usage.total_tokens
             message = completion.choices[0].message
             reply_text = (message.content or "").strip()
             tool_calls = message.tool_calls or []
