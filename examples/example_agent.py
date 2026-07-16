@@ -27,7 +27,7 @@ async def run() -> int:
     """运行交互式聊天，返回进程退出码。"""
     try:
         while True:
-            chat()
+            await chat()
     except (EOFError, KeyboardInterrupt):
         print()
         return 0
