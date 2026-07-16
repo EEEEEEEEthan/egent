@@ -75,6 +75,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         self.__log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
         self.__blackboard = ""
+        self.__assigned = 0
 
         def run_regression_test(targets: str) -> str:  # pylint: disable=redefined-outer-name
             """placeholder"""
@@ -162,8 +163,11 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if content:
             print(content)
 
-    async def start(self, description: str) -> tuple[bool, str]:
+    async def assign(self, description: str) -> tuple[bool, str]:
         """按描述启动开发工作流，返回 (成功与否, 报告)。"""
+        self.__assigned += 1
+        if self.__assigned >= 2:
+            await self.__coder.summarize()
         Path(self.__task_path).write_text(description, encoding="utf-8")
         Path(self.__log_path).write_text("", encoding="utf-8")
         self.__dev_log(f"开始开发工作流: {self.__title}", description)

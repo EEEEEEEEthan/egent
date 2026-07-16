@@ -50,7 +50,7 @@ async def chat():
         shell_tools.run_command("git", "add", "-A")
         wf = workflow.Workflow(leader, title)
         try:
-            success, report = await wf.start(description)
+            success, report = await wf.assign(description)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             report = (
                 f"开发工作流异常：{type(exc).__name__}: {exc}\n\n"
