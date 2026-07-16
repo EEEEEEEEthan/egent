@@ -41,6 +41,13 @@ async def chat():
         @param description: 需求的描述,务必精准且完整.
         """
         nonlocal leader
+
+        def discard_unstaged_changes() -> str:
+            _, restore_output = shell_tools.run_command("git", "restore", ".")
+            _, clean_output = shell_tools.run_command("git", "clean", "-fd")
+            return "\n".join(part for part in (restore_output, clean_output) if part)
+
+        shell_tools.run_command("git", "add", "-A")
         wf = workflow.Workflow(leader, title)
         try:
             success, report = await wf.start(description)
@@ -50,12 +57,13 @@ async def chat():
                 f"{traceback.format_exc()}"
             )
             print(f"\033[31m{report}\033[0m")
+            git_output = discard_unstaged_changes()
+            if git_output:
+                report += f"\n\n{git_output}"
             return report
         report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
         if not success:
-            _, reset_output = shell_tools.run_command("git", "reset", "--hard", "HEAD")
-            _, clean_output = shell_tools.run_command("git", "clean", "-fd")
-            git_output = "\n".join(part for part in (reset_output, clean_output) if part)
+            git_output = discard_unstaged_changes()
             if git_output:
                 report += f"\n\n{git_output}"
             report += "\n\n请考虑调整需求描述重新委派开发工作或者与用户重新讨论需求."

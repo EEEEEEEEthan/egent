@@ -193,7 +193,6 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             passed, comment = await self.__review()
             if passed:
                 self.__dev_log("审查通过,简报如下:", comment)
-                shell_tools.run_command("git", "add", "-A")
                 summary = await self.__coder.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.(直接输出即可,不要使用submit工具)",
