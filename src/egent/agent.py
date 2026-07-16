@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from egent.tool import ToolCallable
 import logging
 import pathlib
 from pathlib import Path
@@ -22,6 +21,7 @@ from openai import NOT_GIVEN, APIConnectionError, APIStatusError, APITimeoutErro
 
 import egent._line_position
 import egent.builtin_tools.file_system_tools
+import egent.builtin_tools.memory_tools
 import egent.builtin_tools.path_validator
 import egent.builtin_tools.skill_tools
 import egent.ephemeral_dirs
@@ -144,7 +144,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         self.__settings = settings
         self.__system_prompt = system_prompt
         self.__skills = tuple[str | Path, ...](skills)
-        self.__tools = tuple[ToolCallable, ...](tools)
+        self.__tools = tuple[egent.tool.ToolCallable, ...](tools)
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
             api_key=model_settings.api_key,
@@ -154,6 +154,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         self.__file_system_tool_set = egent.builtin_tools.file_system_tools.FileSystemToolSet()
         self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions()
         self.__file_system_tool_set.path_permissions = self.__path_permissions
+        self.__memory_tool_set = egent.builtin_tools.memory_tools.MemoryToolSet(self.name)
         self.__path_permissions_text = self.__path_permissions.format_rules()
         self.__messages: list[ChatMessage] = []
         self.__is_busy = False
@@ -178,6 +179,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 *(
                     egent.tool.as_builtin_tool(tool_callable)
                     for tool_callable in self.__file_system_tool_set.tools
+                ),
+                *(
+                    egent.tool.as_builtin_tool(tool_callable)
+                    for tool_callable in self.__memory_tool_set.tools
                 ),
                 *tools,
             ],
