@@ -334,32 +334,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         if not rest:
             return ""
 
-        summary_parts: list[str] = []
-        for message in rest:
-            role = message.get("role", "?")
-            content = message.get("content") or ""
-            if role == "assistant" and message.get("tool_calls"):
-                tool_names = [
-                    tool_call["function"]["name"]
-                    for tool_call in message["tool_calls"]
-                ]
-                summary_parts.append(f"[assistant tool_calls: {', '.join(tool_names)}]")
-            if content:
-                summary_parts.append(f"[{role}]\n{content}")
-
-        response = await self.__run_with_network_retry(
-            lambda: self.__client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": (
-                        "请将以下对话历史压缩为简洁摘要，保留关键决策、已完成工作、"
-                        "当前代码状态与待解决问题。"
-                    )},
-                    {"role": "user", "content": "\n\n".join(summary_parts)},
-                ],
-            ),
-        )
-        summary = response.choices[0].message.content or ""
+        summary = await self.send_message("user", "帮我摘要")
         self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"此前工作摘要:\n{summary}")
         return summary
