@@ -35,10 +35,10 @@ async def run() -> int:
 async def chat():
     """运行交互式聊天，返回进程退出码。"""
 
-    async def develop(title: str, description: str) -> str:
-        """开发
+    async def assign(title: str, description: str) -> str:
+        """开发 - 启动开发工作流。上下文会保持
         @param title: 工作流标题,几个单词即可
-        @param description: 需求的描述,务必精准且完整.
+        @param description: 需求文本.请描述需求背景和精准的需求内容.由于上下文会保持,第二次assign开始可以直接描述修订方案,而不必重复背景.
         """
         nonlocal leader
 
@@ -48,9 +48,8 @@ async def chat():
             return "\n".join(part for part in (restore_output, clean_output) if part)
 
         shell_tools.run_command("git", "add", "-A")
-        wf = workflow.Workflow(leader, title)
         try:
-            success, report = await wf.assign(description)
+            success, report = await wf.assign(description, title)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             report = (
                 f"开发工作流异常：{type(exc).__name__}: {exc}\n\n"
@@ -95,10 +94,11 @@ async def chat():
             "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
             "如果他让你修改项目,你需要提出方案.你提出方案之后需要和他核对,在他明确表达可以开始执行了你才可以开始执行\n"
             "你给出的方案应该措辞精炼,不要说废话.以最简洁的方式给出方案.\n"
-            f"执行修改请使用{develop.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
+            f"执行修改请使用{assign.__name__},而不要亲自执行.为了防止你事必躬亲,我拿掉了你的编辑权限(哈哈)\n"
         ),
-        tools=(develop, egent.builtin_tools.test_tools.run_regression_test, git_commit),
+        tools=(assign, egent.builtin_tools.test_tools.run_regression_test, git_commit),
     )
+    wf = workflow.Workflow(leader)
     leader.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
         discoverable=workflow.DISCOVERABLE_RULE,
         readable=workflow.READABLE_RULE,

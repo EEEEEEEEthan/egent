@@ -65,9 +65,9 @@ def _discover_test_files() -> str:
 class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
     """工作流：一整套开发工作。"""
 
-    def __init__(self, leader: egent.agent.Agent, title: str) -> None:
+    def __init__(self, leader: egent.agent.Agent) -> None:
         self.__leader = leader  # pylint: disable=unused-private-member
-        self.__title = title
+        self.__title = ""
         task_dir = Path(".egent/.temp")
         task_dir.mkdir(parents=True, exist_ok=True)
         self.task_id = uuid.uuid4().hex[:8]
@@ -163,8 +163,9 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if content:
             print(content)
 
-    async def assign(self, description: str) -> tuple[bool, str]:
+    async def assign(self, description: str, title: str) -> tuple[bool, str]:
         """按描述启动开发工作流，返回 (成功与否, 报告)。"""
+        self.__title = title
         self.__assigned += 1
         if self.__assigned >= 2:
             await self.__coder.summarize()
