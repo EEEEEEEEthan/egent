@@ -52,19 +52,23 @@ def get_log_path() -> str:
 
 def _configure_logging() -> None:
     global _log_path  # pylint: disable=global-statement
+    for handler in _logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            _log_path = getattr(handler, "baseFilename", _log_path)
+            _logger.propagate = False
+            for noisy_logger_name in ("httpx", "httpcore", "openai"):
+                logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
+            return
+
     log_dir = pathlib.Path.cwd() / ".egent" / ".logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = str(log_dir / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
     _log_path = log_path
-    if not any(
-        isinstance(handler, logging.FileHandler) and getattr(handler, "baseFilename", None) == log_path
-        for handler in _logger.handlers
-    ):
-        file_handler = logging.FileHandler(log_path, encoding="utf-8")
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(logging.Formatter("%(message)s"))
-        _logger.setLevel(logging.INFO)
-        _logger.addHandler(file_handler)
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter("%(message)s"))
+    _logger.setLevel(logging.INFO)
+    _logger.addHandler(file_handler)
     _logger.propagate = False
     for noisy_logger_name in ("httpx", "httpcore", "openai"):
         logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
