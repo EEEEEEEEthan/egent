@@ -77,10 +77,12 @@ async def chat():
         text = path.read_text(encoding="utf-8")
         match = re.search(r'^version = "(\d+)\.(\d+)\.(\d+)"', text, re.MULTILINE)
         if match:
-            major, minor, patch = match.group(1), match.group(2), int(match.group(3)) + 1
-            version = f"{major}.{minor}.{patch}"
-            path.write_text(text[: match.start()] + f'version = "{version}"' + text[match.end() :], encoding="utf-8")
-        returncode, commit_output = shell_tools.run_command("git", "commit", "-a", "-m", commit_message)
+            version = f"{match.group(1)}.{match.group(2)}.{int(match.group(3)) + 1}"
+            path.write_text(text[:match.start()] + f'version = "{version}"' + text[match.end():], encoding="utf-8")
+        returncode, _ = shell_tools.run_command("git", "add", "-A")
+        if returncode != 0:
+            return "git add 失败"
+        returncode, commit_output = shell_tools.run_command("git", "commit", "-m", commit_message)
         if returncode != 0:
             return f"git 提交失败：\n{commit_output or ''}"
         if version:
