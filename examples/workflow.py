@@ -232,14 +232,17 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 if submit_result is not None:
                     success, report = submit_result
                     if success:
-                        print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {self.__coder.tokens/200000*100:.0f}%]")
+                        pct = self.__coder.tokens / self.__coder.auto_summarize_threshold * 100
+                        print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {pct:.0f}%]")
                         return True, f'"{self.__title}"开发工作完成,简报如下:\n{report}\n\n'
-                    print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {self.__coder.tokens/200000*100:.0f}%]")
+                    pct = self.__coder.tokens / self.__coder.auto_summarize_threshold * 100
+                    print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {pct:.0f}%]")
                     return False, (
                         f'"{self.__title}"开发工作被打回,理由如下:\n{report}\n\n'
                         "请考虑调整任务描述重新委派工作，或者和用户沟通需求"
                     )
-            print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {self.__coder.tokens/200000*100:.0f}%]")
+            pct = self.__coder.tokens / self.__coder.auto_summarize_threshold * 100
+            print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {pct:.0f}%]")
             return False, f'"{self.__title}"开发工作因为无法预测的错误而失败了: 未调用 submit'
         finally:
             self.__coding_submit_hook = None
@@ -254,7 +257,8 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             "直接输出整理说明即可，不需要调用 submit。",
         )
         self.__dev_log("代码整理完成,简报如下:", tidy_report)
-        print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {self.__coder.tokens/200000*100:.0f}%]")
+        pct = self.__coder.tokens / self.__coder.auto_summarize_threshold * 100
+        print(f"[tokens({self.__coder.name}): {self.__coder.tokens/1000:.1f}k, {pct:.0f}%]")
 
     async def __review(self) -> tuple[bool, str]:
         """审查开发成果，返回 (passed, comment)。"""
@@ -315,9 +319,11 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             )
             await reviewer.send()
             if submit_result is not None:
-                print(f"[tokens({reviewer.name}): {reviewer.tokens/1000:.1f}k, {reviewer.tokens/200000*100:.0f}%]")
+                pct = reviewer.tokens / reviewer.auto_summarize_threshold * 100
+                print(f"[tokens({reviewer.name}): {reviewer.tokens/1000:.1f}k, {pct:.0f}%]")
                 return submit_result
-        print(f"[tokens({reviewer.name}): {reviewer.tokens/1000:.1f}k, {reviewer.tokens/200000*100:.0f}%]")
+        pct = reviewer.tokens / reviewer.auto_summarize_threshold * 100
+        print(f"[tokens({reviewer.name}): {reviewer.tokens/1000:.1f}k, {pct:.0f}%]")
         return False, f'"{self.__title}"审查工作因为无法预测的错误而失败了: 未调用 submit'
 
 

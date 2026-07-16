@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from egent.tool import ToolCallable
 import logging
 import pathlib
+from pathlib import Path
 import re
 import traceback
 import uuid
@@ -110,7 +112,7 @@ class TurnCompleted(AgentEvent):
 
 
 
-class Agent:  # pylint: disable=too-many-instance-attributes
+class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
     """维护 messages 历史并调用 Chat Completions API。"""
 
     def __init__(
@@ -121,6 +123,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
         system_prompt: str = "",
         skills: Iterable[str | pathlib.Path] = (),
         tools: Iterable[egent.tool.ToolCallable] = (),
+        auto_summarize_threshold: int = 100000,
     ) -> None:
         """初始化对话会话。
 
@@ -130,12 +133,14 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             system_prompt: 系统提示词正文；会与技能目录等拼成一条开头 system 消息。
             skills: 技能路径列表，每项为技能目录或 ``SKILL.md`` 路径。
             tools: 自定义工具列表，构造后固定不变。
+            auto_summarize_threshold: tokens 达到此阈值时自动触发摘要压缩。
         """
         self.name = name
+        self.auto_summarize_threshold = auto_summarize_threshold
         self.__settings = settings
         self.__system_prompt = system_prompt
-        self.__skills = tuple(skills)
-        self.__tools = tuple(tools)
+        self.__skills = tuple[str | Path, ...](skills)
+        self.__tools = tuple[ToolCallable, ...](tools)
         model_settings = egent.model_settings.ModelSettings.load(settings)
         self.__client = AsyncOpenAI(
             api_key=model_settings.api_key,
@@ -253,6 +258,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             raise RuntimeError("Agent 正在 send，不能重复 send")
         self.__is_busy = True
         try:
+            if self.__tokens >= self.auto_summarize_threshold:
+                await self.summarize()
             return await self.__send_loop()
         finally:
             async with self.__busy_condition:
@@ -265,7 +272,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes
             completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
             usage = getattr(completion, 'usage', None)
             if usage is not None:
-                self.__tokens = usage.total_tokens
+                self.__tokens = usage.prompt_tokens
             message = completion.choices[0].message
             reply_text = (message.content or "").strip()
             tool_calls = message.tool_calls or []
@@ -330,13 +337,20 @@ class Agent:  # pylint: disable=too-many-instance-attributes
                 break
             system_prefix.append(message)
 
-        rest = self.__messages[len(system_prefix):]
-        if not rest:
+        if len(self.__messages) <= len(system_prefix):
             return ""
 
-        summary = await self.send_message("user", "请将以上对话历史压缩为简洁摘要，保留关键决策、已完成工作、当前代码状态与待解决问题。")
+        completion = await self.__client.chat.completions.create(
+            model=self.model,
+            messages=[
+                *deepcopy(system_prefix),
+                {"role": "user", "content": "请将以上对话历史压缩为简洁摘要，保留关键决策、已完成工作、当前代码状态与待解决问题。"},
+            ],
+        )
+        summary = (completion.choices[0].message.content or "").strip()
         self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"此前工作摘要:\n{summary}")
+        print(f"[summarized({self.name})]")
         return summary
 
     def __sync_path_permissions_notice(self) -> None:
