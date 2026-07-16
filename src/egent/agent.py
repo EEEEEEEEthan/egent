@@ -358,14 +358,13 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         if len(self.__messages) <= len(system_prefix):
             return ""
 
-        completion = await self.__client.chat.completions.create(
+        summary = ((await self.__client.chat.completions.create(
             model=self.model,
             messages=[
                 *deepcopy(system_prefix),
-                {"role": "user", "content": "请将以上对话历史压缩为简洁摘要，保留关键决策、已完成工作、当前代码状态与待解决问题。"},
+                {"role": "user", "content": "请将以上对话历史压缩为摘要，目标字数约为原文的1/3。保留关键决策、已完成工作、当前代码状态与待解决问题，省略冗余讨论和过程细节。"},
             ],
-        )
-        summary = (completion.choices[0].message.content or "").strip()
+        )).choices[0].message.content or "").strip()
         self.__messages = deepcopy(system_prefix)
         self.__add_message("system", f"此前工作摘要:\n{summary}")
         print(f"[summarized({self.name})]")
