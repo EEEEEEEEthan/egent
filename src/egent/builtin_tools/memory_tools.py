@@ -17,7 +17,7 @@ class MemoryToolSet:
 
     @property
     def __memory_dir(self) -> Path:
-        return Path.cwd() / ".egent" / self.agent_name / "memory"
+        return Path.cwd() / ".egent" / ".memory" / self.agent_name
 
     def memory_remember(self, title: str, content: str) -> str:
         """新建一条记忆。
