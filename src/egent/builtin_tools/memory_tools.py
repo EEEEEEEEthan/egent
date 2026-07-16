@@ -19,7 +19,7 @@ class MemoryToolSet:
     def __memory_dir(self) -> Path:
         return Path.cwd() / ".egent" / self.agent_name / "memory"
 
-    def remember(self, title: str, content: str) -> str:
+    def memory_remember(self, title: str, content: str) -> str:
         """新建一条记忆。
 
         @param title 记忆标题（非法字符将替换为 _）
@@ -33,7 +33,7 @@ class MemoryToolSet:
         file_path.write_text(content, encoding="utf-8")
         return f"已创建记忆：{title}"
 
-    def recall(self, pattern: str) -> str:
+    def memory_recall(self, pattern: str) -> str:
         """正则搜索记忆目录下所有 .md 文件名+内容，返回匹配列表。
 
         @param pattern 正则表达式
@@ -62,7 +62,7 @@ class MemoryToolSet:
                 continue
         return "\n".join(matched) if matched else "(无匹配)"
 
-    def update_memory(self, title: str, content: str) -> str:
+    def memory_update(self, title: str, content: str) -> str:
         """覆盖写入一条记忆。
 
         @param title 记忆标题
@@ -74,7 +74,7 @@ class MemoryToolSet:
         file_path.write_text(content, encoding="utf-8")
         return f"已更新记忆：{title}"
 
-    def forget(self, title: str) -> str:
+    def memory_forget(self, title: str) -> str:
         """删除一条记忆。
 
         @param title 记忆标题
@@ -95,4 +95,4 @@ class MemoryToolSet:
     @property
     def tools(self) -> tuple:
         """全部记忆系统工具。"""
-        return (self.remember, self.recall, self.update_memory, self.forget)
+        return (self.memory_remember, self.memory_recall, self.memory_update, self.memory_forget)

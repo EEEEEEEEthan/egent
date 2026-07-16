@@ -195,7 +195,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         if titles := self.__memory_tool_set.list_titles:
             system_sections.append(f"已有记忆: {', '.join(titles)}")
         if self.__memory_tool_set.tools:
-            system_sections.append("你可以使用记忆工具 (__bt_remember/__bt_recall/__bt_update_memory/__bt_forget) 持久化重要信息。注意记忆可能信息迟滞，需自行判断时效性。")
+            system_sections.append("你可以使用记忆工具 (__bt_memory_remember/__bt_memory_recall/__bt_memory_update/__bt_memory_forget) 持久化重要信息。注意记忆可能信息迟滞，需自行判断时效性。")
         if system_sections:
             self.__add_message("system", "\n\n".join(system_sections))
 
