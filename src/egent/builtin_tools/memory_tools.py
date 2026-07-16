@@ -86,6 +86,13 @@ class MemoryToolSet:
         return f"已删除记忆：{title}"
 
     @property
+    def list_titles(self) -> list[str]:
+        """返回排序后的 .md 文件名（不含后缀），无文件返回空列表。"""
+        if not (d := self.__memory_dir).is_dir():
+            return []
+        return sorted(f.stem for f in d.glob("*.md") if f.is_file())
+
+    @property
     def tools(self) -> tuple:
         """全部记忆系统工具。"""
         return (self.remember, self.recall, self.update_memory, self.forget)

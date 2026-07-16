@@ -192,6 +192,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             for section in (system_prompt, skill_catalog if skill_index else "")
             if section.strip()
         ]
+        if titles := self.__memory_tool_set.list_titles:
+            system_sections.append(f"已有记忆: {', '.join(titles)}")
         if system_sections:
             self.__add_message("system", "\n\n".join(system_sections))
 
