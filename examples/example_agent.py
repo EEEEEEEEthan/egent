@@ -114,6 +114,7 @@ async def chat():
             break
         leader.add_message("user", user_input)
         await leader.send()
+        print(f"[tokens({leader.name}): {leader.tokens/1000:.1f}k, {leader.tokens/200000*100:.0f}%]")
         hot_reload(leader)
 
 if __name__ == "__main__":
