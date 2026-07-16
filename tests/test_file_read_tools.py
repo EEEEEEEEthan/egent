@@ -1,4 +1,5 @@
 """文件读取内置工具单元测试。"""
+# pylint: disable=protected-access,no-name-in-module,import-error,no-member
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ import pytest
 
 import egent.builtin_tools.file_system_tools
 import egent.builtin_tools.path_validator
-import egent.limits
+import egent._constants
 
 
 def _under_root(_root: Path) -> egent.builtin_tools.path_validator.PathPermissions:
@@ -96,19 +97,19 @@ def test_read_file_truncates_long_content(tmp_path: Path, monkeypatch) -> None:
     """read_file 应截断超出上限的内容。"""
     monkeypatch.chdir(tmp_path)
     sample_file = tmp_path / "large.txt"
-    sample_file.write_text("x" * (egent.limits.TOOL_RESULT_MAX_CHARS + 100), encoding="utf-8")
+    sample_file.write_text("x" * (egent._constants.TOOL_RESULT_MAX_CHARS + 100), encoding="utf-8")
     read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
 
     result = read_file("large.txt")
 
     assert "内容太长被截断" in result
-    assert len(result) < len("x" * (egent.limits.TOOL_RESULT_MAX_CHARS + 100))
+    assert len(result) < len("x" * (egent._constants.TOOL_RESULT_MAX_CHARS + 100))
 
 
 def test_read_file_truncation_reports_continuation_position(tmp_path: Path, monkeypatch) -> None:
     """read_file 截断时应提示续读的 line 与 column。"""
     monkeypatch.chdir(tmp_path)
-    max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+    max_chars = egent._constants.TOOL_RESULT_MAX_CHARS * 9 // 10
     sample_file = tmp_path / "large.txt"
     sample_file.write_text("x" * (max_chars + 50), encoding="utf-8")
     read_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).read_file
@@ -365,7 +366,7 @@ def test_search_file_returns_full_matches_without_early_truncation(
 ) -> None:
     """search_file 应返回完整匹配串，超长截断交给 agent 消息层。"""
     monkeypatch.chdir(tmp_path)
-    max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+    max_chars = egent._constants.TOOL_RESULT_MAX_CHARS * 9 // 10
     match_line = "x" * max_chars
     sample_file = tmp_path / "many.txt"
     sample_file.write_text(
@@ -387,7 +388,7 @@ def test_search_directory_returns_full_matches_without_early_truncation(
 ) -> None:
     """search_directory 应返回完整匹配串，超长截断交给 agent 消息层。"""
     monkeypatch.chdir(tmp_path)
-    max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+    max_chars = egent._constants.TOOL_RESULT_MAX_CHARS * 9 // 10
     match_line = "y" * max_chars
     (tmp_path / "first.txt").write_text(match_line + "\n", encoding="utf-8")
     (tmp_path / "second.txt").write_text("y\n", encoding="utf-8")
@@ -403,7 +404,7 @@ def test_search_file_reports_timeout(tmp_path: Path, monkeypatch) -> None:
     """search_file 超时时应附带超时提示。"""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data.txt").write_text("match\nmatch\n", encoding="utf-8")
-    monkeypatch.setattr(egent.limits, "SEARCH_FILE_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(egent._constants, "SEARCH_FILE_TIMEOUT_SECONDS", 0)
     search_file = egent.builtin_tools.file_system_tools.FileSystemToolSet(_under_root(tmp_path)).search_file
 
     result = search_file("match", path="data.txt")
@@ -416,7 +417,7 @@ def test_search_directory_reports_timeout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.txt").write_text("match\n", encoding="utf-8")
     (tmp_path / "b.txt").write_text("match\n", encoding="utf-8")
-    monkeypatch.setattr(egent.limits, "SEARCH_DIRECTORY_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(egent._constants, "SEARCH_DIRECTORY_TIMEOUT_SECONDS", 0)
     search_directory = egent.builtin_tools.file_system_tools.FileSystemToolSet(
         _under_root(tmp_path),
     ).search_directory

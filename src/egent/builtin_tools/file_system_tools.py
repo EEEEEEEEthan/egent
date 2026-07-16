@@ -1,4 +1,5 @@
 """文件系统内置工具（读取与编辑）。"""
+# pylint: disable=protected-access
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ from pathlib import Path
 
 import egent._line_position
 import egent.builtin_tools.path_validator
-import egent.limits
+import egent._constants
 import egent.tool
 
 __all__ = ["FileSystemToolSet"]
@@ -100,7 +101,7 @@ class FileSystemToolSet:
             raise ValueError(f"无效的正则表达式：{regex_error}") from regex_error
         root = self._open_directory(directory)
         deadline_monotonic = (
-            time.monotonic() + egent.limits.SEARCH_DIRECTORY_TIMEOUT_SECONDS
+            time.monotonic() + egent._constants.SEARCH_DIRECTORY_TIMEOUT_SECONDS
         )
         matched_lines: list[str] = []
         timed_out = False
@@ -145,7 +146,7 @@ class FileSystemToolSet:
                     continue
                 relative_path_label = resolved_entry_path.relative_to(root).as_posix()
                 file_deadline_monotonic = min(
-                    time.monotonic() + egent.limits.SEARCH_FILE_TIMEOUT_SECONDS,
+                    time.monotonic() + egent._constants.SEARCH_FILE_TIMEOUT_SECONDS,
                     deadline_monotonic,
                 )
                 file_matches, file_timed_out = self._collect_search_matches(
@@ -183,7 +184,7 @@ class FileSystemToolSet:
             raise FileNotFoundError(f"文件不存在：{path}")
         if self.path_permissions is not None and not self.path_permissions.is_readable(resolved):
             raise PermissionError(f"没有权限搜索文件：{path}")
-        deadline_monotonic = time.monotonic() + egent.limits.SEARCH_FILE_TIMEOUT_SECONDS
+        deadline_monotonic = time.monotonic() + egent._constants.SEARCH_FILE_TIMEOUT_SECONDS
         matched_lines, timed_out = self._collect_search_matches(
             resolved,
             regex,
@@ -217,10 +218,10 @@ class FileSystemToolSet:
         if not content:
             return "(空文件)"
         # 文件在磁盘上，AI 可用 line/column 续读；降低阈值避免读临时文件循环。
-        max_chars = egent.limits.TOOL_RESULT_MAX_CHARS * 9 // 10
+        max_chars = egent._constants.TOOL_RESULT_MAX_CHARS * 9 // 10
         if len(content) <= max_chars:
             return content
-        next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
+        next_line, next_column = egent._line_position.position_after_characters(
             file_lines,
             start_line,
             start_column,

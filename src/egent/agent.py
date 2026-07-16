@@ -25,7 +25,7 @@ import egent.builtin_tools.memory_tools
 import egent.builtin_tools.path_validator
 import egent.builtin_tools.skill_tools
 import egent.ephemeral_dirs
-import egent.limits
+import egent._constants
 import egent.model_settings
 import egent.tool
 
@@ -373,26 +373,27 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         for listener in self.__event_listeners:
             listener(event)
 
-    def __truncate_message_content(self, role: ChatRole, content: str) -> str:
+    def __truncate_message_content(self, role: ChatRole, content: str) -> str:  # pylint: disable=protected-access
         # 以 TOOL_RESULT_MAX_CHARS 作为截断阈值，超出部分保存到 .egent/.temp/ 临时文件。
         # 原因：工具返回值是一次性的，无其他持久化来源，不保存则 AI 永远无法看到完整内容。
-        if len(content) <= egent.limits.TOOL_RESULT_MAX_CHARS:
+        max_chars = egent._constants.TOOL_RESULT_MAX_CHARS
+        if len(content) <= max_chars:
             return content
-        head = content[:egent.limits.TOOL_RESULT_MAX_CHARS]
-        tail = content[egent.limits.TOOL_RESULT_MAX_CHARS:]
+        head = content[:max_chars]
+        tail = content[max_chars:]
         egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
         egent_temp_dir.mkdir(parents=True, exist_ok=True)
-        egent.model_settings.ensure_egent_gitignore()
+        egent._constants.ensure_egent_gitignore()
         file_name = f"{role}-{uuid.uuid4().hex}.txt"
         (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
         egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
         relative_path = f".egent/.temp/{file_name}"
         file_lines = content.splitlines(keepends=True) or ([content] if content else [])
-        next_line, next_column = egent._line_position.position_after_characters(  # pylint: disable=protected-access
+        next_line, next_column = egent._line_position.position_after_characters(
             file_lines,
             1,
             1,
-            egent.limits.TOOL_RESULT_MAX_CHARS,
+            max_chars,
         )
         return (
             f"{head}...\n"
