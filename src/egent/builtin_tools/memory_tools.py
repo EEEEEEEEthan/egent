@@ -23,7 +23,7 @@ class MemoryToolSet:
         """新建一条记忆。
 
         @param title 记忆标题（非法字符将替换为 _）
-        @param content 记忆内容
+        @param content 记忆内容（Markdown 格式文档）
         """
         memory_dir = self.__memory_dir
         memory_dir.mkdir(parents=True, exist_ok=True)
@@ -66,7 +66,7 @@ class MemoryToolSet:
         """覆盖写入一条记忆。
 
         @param title 记忆标题
-        @param content 记忆内容
+        @param content 记忆内容（Markdown 格式文档）
         """
         file_path = self.__memory_dir / f"{_INVALID_FILENAME_CHARS.sub('_', title)}.md"
         if not file_path.exists():
@@ -85,6 +85,16 @@ class MemoryToolSet:
         file_path.unlink()
         return f"已删除记忆：{title}"
 
+    def memory_read(self, title: str) -> str:
+        """按标题读取完整 .md 内容返回。
+
+        @param title 记忆标题
+        """
+        file_path = self.__memory_dir / f"{_INVALID_FILENAME_CHARS.sub('_', title)}.md"
+        if not file_path.exists():
+            raise FileNotFoundError(f"记忆不存在：{title}")
+        return file_path.read_text(encoding="utf-8")
+
     @property
     def list_titles(self) -> list[str]:
         """返回排序后的 .md 文件名（不含后缀），无文件返回空列表。"""
@@ -95,4 +105,4 @@ class MemoryToolSet:
     @property
     def tools(self) -> tuple:
         """全部记忆系统工具。"""
-        return (self.memory_remember, self.memory_recall, self.memory_update, self.memory_forget)
+        return (self.memory_remember, self.memory_recall, self.memory_update, self.memory_forget, self.memory_read)

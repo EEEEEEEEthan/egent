@@ -199,7 +199,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 "你拥有跨会话持久化的记忆系统。每当获得重要信息——如用户偏好、项目约定、关键决策、经验教训等——"
                 "你必须主动调用 __bt_memory_remember 写入记忆，而非等用户提醒。每轮对话结束前，回顾本轮内容判断是否需要记录。"
                 "查询已有信息时先 __bt_memory_recall 检索，注意记忆可能信息迟滞，需自行判断时效性。"
-                "工具: __bt_memory_remember(新建)、__bt_memory_recall(搜索)、__bt_memory_update(更新)、__bt_memory_forget(删除)。"
+                "工具: __bt_memory_remember(新建)、__bt_memory_recall(搜索)、__bt_memory_read(阅读完整记忆)、__bt_memory_update(更新)、__bt_memory_forget(删除)。"
             )
         if system_sections:
             self.__add_message("system", "\n\n".join(system_sections))
