@@ -332,6 +332,25 @@ class FileSystemToolSet:
             return f"已删除目录：{resolved_path}"
         raise ValueError(f"路径不是文件也不是目录：{path}")
 
+    def outline(self, path: str) -> str:
+        """解析文件大纲：提取结构化定义行
+
+        @param path 文件路径（如果填相对路径将以当前工作目录为基准）
+        """
+        import importlib  # pylint: disable=import-outside-toplevel
+        resolved = egent.builtin_tools.path_validator.resolve_path(path)
+        if not resolved.is_file():
+            raise FileNotFoundError(f"文件不存在：{path}")
+        if self.path_permissions is not None and not self.path_permissions.is_readable(resolved):
+            raise PermissionError(f"没有权限读取文件：{path}")
+        if (
+            parser_cls := importlib.import_module(
+                "egent.builtin_tools.outline_tools"
+            ).get_parser(resolved.suffix)
+        ) is None:
+            return "不支持的文件类型"
+        return parser_cls().parse(self._read_utf8_text(resolved, path))
+
     @property
     def read_tools(self) -> tuple[
         egent.tool.ToolCallable,
@@ -339,14 +358,16 @@ class FileSystemToolSet:
         egent.tool.ToolCallable,
         egent.tool.ToolCallable,
         egent.tool.ToolCallable,
+        egent.tool.ToolCallable,
     ]:
-        """读取类工具（权限列表、遍历、读取、目录搜索、文件搜索）。"""
+        """读取类工具（权限列表、遍历、读取、目录搜索、文件搜索、大纲解析）。"""
         return (
             self.list_path_permissions,
             self.walk_files,
             self.read_file,
             self.search_directory,
             self.search_file,
+            self.outline,
         )
 
     @property
