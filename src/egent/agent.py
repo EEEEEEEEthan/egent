@@ -334,11 +334,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 self.__busy_condition.notify_all()
 
     async def __send_loop(self, reasoning_effort: str | None = None) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-        while True:
+        for _ in range(100):
             self.__sync_path_permissions_notice()
             completion = await self.__run_with_network_retry(lambda: self.__fetch_chat_completion(reasoning_effort))
-            usage = getattr(completion, 'usage', None)
-            if usage is not None:
+            if (usage := getattr(completion, 'usage', None)) is not None:
                 self.__tokens = usage.total_tokens
             message = completion.choices[0].message
             reply_text = (message.content or "").strip()
@@ -362,7 +361,6 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                     tool_call.function.arguments,
                 )
                 self.__emit_event(ToolCallStarted(name=function_name, arguments=function_arguments))
-                is_exception = False
                 try:
                     handler = self.__tool_handlers.get(function_name)
                     if handler is None:
@@ -378,6 +376,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 except Exception:  # pylint: disable=broad-exception-caught
                     handler_result = traceback.format_exc().rstrip("\n")
                     is_exception = True
+                else:
+                    is_exception = False
                 tool_message = self.__add_message(
                     "tool",
                     self.__truncate_message_content("tool", handler_result),
@@ -395,6 +395,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 reply_text = f"使用了{conversation_terminating_tool_name}"
                 self.__emit_event(TurnCompleted(reply_text))
                 return reply_text
+        raise RuntimeError("send_loop 超过 100 轮仍未结束")
 
     async def summarize(self) -> str:
         """压缩对话历史：保留开头 system 设定，其余合并为一条摘要 system 消息。"""

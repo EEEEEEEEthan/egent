@@ -1,6 +1,6 @@
 [project]
 name = "egent"
-version = "0.1.40"
+version = "0.1.41"
 description = "Chat Completions 多轮对话与工具调用封装"
 requires-python = ">=3.13"
 dependencies = [
