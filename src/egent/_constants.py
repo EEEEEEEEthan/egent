@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
+import tempfile
 
 TOOL_RESULT_MAX_CHARS = 8_000
-EPHEMERAL_DIR_MAX_FILES = 128
 SEARCH_FILE_TIMEOUT_SECONDS = 10
 SEARCH_DIRECTORY_TIMEOUT_SECONDS = 30
 
 EGENT_DIR = pathlib.Path.cwd() / ".egent"
-EGENT_GITIGNORE_ENTRIES = (".model.toml", "/.temp/", "/.logs/", "*/memories/")
+EGENT_GITIGNORE_ENTRIES = (".model.toml", "*/memories/")
+
+PROJECT_HASH = hashlib.sha256(pathlib.Path.cwd().resolve().as_posix().encode()).hexdigest()[:8]
+EPHEMERAL_ROOT = pathlib.Path(tempfile.gettempdir()) / "egent"
 
 
 def ensure_egent_gitignore() -> None:

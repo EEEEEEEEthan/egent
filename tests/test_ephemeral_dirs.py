@@ -3,54 +3,72 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import egent.ephemeral_dirs
 
 
-def _touch_file(path: Path, modified_timestamp: float) -> None:
-    path.write_text(path.name, encoding="utf-8")
+def _touch_dir(path: Path, modified_timestamp: float) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".keep").write_text("", encoding="utf-8")
     os.utime(path, (modified_timestamp, modified_timestamp))
+    os.utime(path / ".keep", (modified_timestamp, modified_timestamp))
 
 
-def test_prune_keeps_newest_files(tmp_path: Path) -> None:
-    """超出上限时应保留修改时间最新的文件。"""
-    directory = tmp_path / "temp"
-    directory.mkdir()
-    for index in range(5):
-        _touch_file(directory / f"file-{index:02d}.txt", float(index))
+def test_prune_stale_subdirs_removes_old_subdirs(tmp_path: Path) -> None:
+    """超出期限的子目录应被删除。"""
+    root = tmp_path / "ephemeral"
+    root.mkdir()
+    project = root / "my-project"
+    project.mkdir()
+    _touch_dir(project / "old-session", time.time() - 20 * 86400)
+    _touch_dir(project / "fresh-session", time.time() - 100)
 
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(directory, max_files=3)
+    egent.ephemeral_dirs.prune_stale_subdirs(root, max_age_days=10)
 
-    remaining_names = {path.name for path in directory.iterdir()}
-    assert remaining_names == {"file-02.txt", "file-03.txt", "file-04.txt"}
-
-
-def test_prune_ignores_subdirectories(tmp_path: Path) -> None:
-    """清理时不应删除子目录，也不应把目录计入文件数。"""
-    directory = tmp_path / "temp"
-    directory.mkdir()
-    (directory / "nested").mkdir()
-    for index in range(3):
-        _touch_file(directory / f"file-{index}.txt", float(index))
-
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(directory, max_files=1)
-
-    remaining_names = {path.name for path in directory.iterdir()}
-    assert remaining_names == {"file-2.txt", "nested"}
+    remaining = sorted(p.name for p in project.iterdir())
+    assert remaining == ["fresh-session"]
 
 
-def test_prune_noop_when_within_limit(tmp_path: Path) -> None:
-    """文件数未超限时不应删除任何文件。"""
-    directory = tmp_path / "temp"
-    directory.mkdir()
-    _touch_file(directory / "only.txt", 1_000.0)
+def test_prune_stale_subdirs_removes_empty_project_dirs(tmp_path: Path) -> None:
+    """所有子目录过期删除后，空的项目目录也应当被清理。"""
+    root = tmp_path / "ephemeral"
+    root.mkdir()
+    project = root / "my-project"
+    _touch_dir(project / "old-session", time.time() - 20 * 86400)
 
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(directory, max_files=128)
+    egent.ephemeral_dirs.prune_stale_subdirs(root, max_age_days=10)
 
-    assert list(directory.iterdir()) == [directory / "only.txt"]
+    assert not any(root.iterdir())
 
 
-def test_prune_noop_for_missing_directory(tmp_path: Path) -> None:
-    """目录不存在时应静默返回。"""
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(tmp_path / "missing")
+def test_prune_stale_subdirs_noop_within_age(tmp_path: Path) -> None:
+    """所有子目录都在期限内时不应删除。"""
+    root = tmp_path / "ephemeral"
+    root.mkdir()
+    project = root / "my-project"
+    project.mkdir()
+    _touch_dir(project / "recent-session", time.time() - 100)
+
+    egent.ephemeral_dirs.prune_stale_subdirs(root, max_age_days=10)
+
+    remaining = sorted(p.name for p in project.iterdir())
+    assert remaining == ["recent-session"]
+
+
+def test_prune_stale_subdirs_noop_for_missing_root(tmp_path: Path) -> None:
+    """根目录不存在时应静默返回。"""
+    egent.ephemeral_dirs.prune_stale_subdirs(tmp_path / "missing")
+
+
+def test_prune_stale_subdirs_ignores_files(tmp_path: Path) -> None:
+    """root 下的普通文件应被忽略。"""
+    root = tmp_path / "ephemeral"
+    root.mkdir()
+    (root / "some_file.txt").write_text("hello", encoding="utf-8")
+
+    egent.ephemeral_dirs.prune_stale_subdirs(root, max_age_days=10)
+
+    remaining = sorted(p.name for p in root.iterdir())
+    assert remaining == ["some_file.txt"]

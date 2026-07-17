@@ -68,11 +68,11 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
     def __init__(self, leader: egent.agent.Agent) -> None:
         self.__leader = leader  # pylint: disable=unused-private-member
         self.__title = ""
-        task_dir = Path(".egent/.temp")
-        task_dir.mkdir(parents=True, exist_ok=True)
+        self.__task_dir = egent._constants.EPHEMERAL_ROOT / egent._constants.PROJECT_HASH / egent.agent._session_guid
+        self.__task_dir.mkdir(parents=True, exist_ok=True)
         self.task_id = uuid.uuid4().hex[:8]
-        self.__task_path = (task_dir / f"task-{self.task_id}.txt").as_posix()
-        self.__log_path = (task_dir / f"task-{self.task_id}.log").as_posix()
+        self.__task_path = str((self.__task_dir / f"task-{self.task_id}.txt").resolve())
+        self.log_path = str((self.__task_dir / f"task-{self.task_id}.log").resolve())
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
         self.__blackboard = ""
         self.__assigned = 0
@@ -135,7 +135,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             whitelist=(f"{_WORKING_DIRECTORY}/*",),
             blacklist=(
                 f"{_WORKING_DIRECTORY}/.egent/.model.toml",
-                f"{_WORKING_DIRECTORY}/.egent/.temp/task-*",
+                f"{self.__task_dir}/task-*",
             ),
         )
         self.__coder = egent.agent.Agent(
@@ -151,7 +151,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         )
 
     def __dev_log(self, title: str, content: str = "") -> None:
-        with Path(self.__log_path).open("a", encoding="utf-8") as log_file:
+        with Path(self.log_path).open("a", encoding="utf-8") as log_file:
             log_file.write(title)
             log_file.write("\n")
             if content:
@@ -174,7 +174,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if self.__assigned >= 2:
             await self.__coder.summarize()
         Path(self.__task_path).write_text(description, encoding="utf-8")
-        Path(self.__log_path).write_text("", encoding="utf-8")
+        Path(self.log_path).write_text("", encoding="utf-8")
         self.__dev_log(f"开始开发工作流: {self.__title}", description)
         shell_tools.run_command("git", "add", "-A")
         for _ in range(10):
@@ -309,7 +309,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             submit_result = None
             untracked = shell_tools.run_command("git", "ls-files", "-o", "--exclude-standard")[1]
             diff_out = shell_tools.run_command("git", "diff")[1]
-            diff_path = Path(f".egent/.temp/task-{self.task_id}-diff.txt")
+            diff_path = self.__task_dir / f"task-{self.task_id}-diff.txt"
             diff_path.write_text(
                 f"=== 未跟踪文件 ===\n{untracked}\n{diff_out}" if untracked
                 else (diff_out or "没有 diff（工作区干净，或没有可展示的变更）"),

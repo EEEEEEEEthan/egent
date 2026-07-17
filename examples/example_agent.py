@@ -60,7 +60,7 @@ async def chat():
             if git_output:
                 report += f"\n\n{git_output}"
             return report
-        report = f"{report}\n\n开发日志见.egent/.temp/task-{wf.task_id}.log"
+        report = f"{report}\n\n开发日志见 {wf.log_path}"
         if not success:
             git_output = discard_unstaged_changes()
             if git_output:

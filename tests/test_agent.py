@@ -452,6 +452,21 @@ def _ok_completion() -> SimpleNamespace:
     )
 
 
+def test_agent_readable_whitelist_includes_ephemeral_dir(monkeypatch) -> None:
+    """新建 Agent 的 readable 白名单应包含当前会话临时目录路径。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+            thinking_mode="none",
+        ),
+    )
+    agent = egent.agent.Agent(settings="test")
+    assert f"{egent._constants.EPHEMERAL_ROOT / egent._constants.PROJECT_HASH / egent.agent.get_session_guid()}/*" in agent.path_permissions.readable.whitelist
+
+
 @pytest.mark.asyncio
 async def test_await_free_returns_immediately_when_idle(monkeypatch) -> None:
     """空闲时 await_free 应立即返回且未 busy。"""

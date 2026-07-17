@@ -1,5 +1,7 @@
 """Chat Completions Agent 封装。"""
 
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 import asyncio
@@ -46,11 +48,17 @@ _RETRYABLE_NETWORK_EXCEPTIONS: tuple[type[BaseException], ...] = (
 )
 _logger = logging.getLogger(__name__)
 _log_path: str = ""  # pylint: disable=invalid-name
+_session_guid = uuid.uuid4().hex[:8]  # pylint: disable=invalid-name
 
 
 def get_log_path() -> str:
     """返回当前日志文件路径。"""
     return _log_path
+
+
+def get_session_guid() -> str:
+    """返回当前会话 GUID。"""
+    return _session_guid
 
 
 def _configure_logging() -> None:
@@ -63,9 +71,9 @@ def _configure_logging() -> None:
                 logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
             return
 
-    log_dir = pathlib.Path.cwd() / ".egent" / ".logs"
+    log_dir = egent._constants.EPHEMERAL_ROOT / egent._constants.PROJECT_HASH / _session_guid
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = str(log_dir / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+    log_path = str((log_dir / "runtime.log").resolve())
     _log_path = log_path
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
@@ -75,10 +83,10 @@ def _configure_logging() -> None:
     _logger.propagate = False
     for noisy_logger_name in ("httpx", "httpcore", "openai"):
         logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
-    egent.ephemeral_dirs.prune_oldest_files_in_directory(log_dir)
 
 
 _configure_logging()
+egent.ephemeral_dirs.prune_stale_subdirs(egent._constants.EPHEMERAL_ROOT, max_age_days=10)
 
 
 @dataclass(frozen=True)
@@ -163,7 +171,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         self.model = model_settings.model_name
         self.__thinking_mode = model_settings.thinking_mode
         self.__file_system_tool_set = egent.builtin_tools.file_system_tools.FileSystemToolSet()
-        self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions()
+        self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions(
+            readable=egent.builtin_tools.path_validator.PathPermissionRule(
+                whitelist=("*", f"{egent._constants.EPHEMERAL_ROOT / egent._constants.PROJECT_HASH / _session_guid}/*"),
+            ),
+        )
         self.__file_system_tool_set.path_permissions = self.__path_permissions
         self.__memory_tool_set = egent.builtin_tools.memory_tools.MemoryToolSet(self.name)
         self.__web_search_tool_set = egent.builtin_tools.web_search_tools.WebToolSet()
@@ -263,6 +275,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         self,
         value: egent.builtin_tools.path_validator.PathPermissions,
     ) -> None:
+        ephemeral_pattern = f"{egent._constants.EPHEMERAL_ROOT / egent._constants.PROJECT_HASH / _session_guid}/*"
+        if ephemeral_pattern not in value.readable.whitelist:
+            value = egent.builtin_tools.path_validator.PathPermissions(
+                discoverable=value.discoverable,
+                readable=egent.builtin_tools.path_validator.PathPermissionRule(
+                    whitelist=value.readable.whitelist + (ephemeral_pattern,),
+                    blacklist=value.readable.blacklist,
+                ),
+                editable=value.editable,
+            )
         self.__path_permissions = value
         self.__file_system_tool_set.path_permissions = value
 
@@ -416,13 +438,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             return content
         head = content[:max_chars]
         tail = content[max_chars:]
-        egent_temp_dir = pathlib.Path.cwd() / ".egent" / ".temp"
+        egent_temp_dir = egent._constants.EPHEMERAL_ROOT / egent._constants.PROJECT_HASH / _session_guid
         egent_temp_dir.mkdir(parents=True, exist_ok=True)
-        egent._constants.ensure_egent_gitignore()
         file_name = f"{role}-{uuid.uuid4().hex}.txt"
         (egent_temp_dir / file_name).write_text(content, encoding="utf-8")
-        egent.ephemeral_dirs.prune_oldest_files_in_directory(egent_temp_dir)
-        relative_path = f".egent/.temp/{file_name}"
+        absolute_path = str((egent_temp_dir / file_name).resolve())
         file_lines = content.splitlines(keepends=True) or ([content] if content else [])
         next_line, next_column = egent._line_position.position_after_characters(
             file_lines,
@@ -432,7 +452,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         )
         return (
             f"{head}...\n"
-            f"(内容太长被截断,剩余{len(tail)}字符,完整内容保存于{relative_path},"
+            f"(内容太长被截断,剩余{len(tail)}字符,完整内容保存于{absolute_path},"
             f"请用 line={next_line} column={next_column} 继续读取)"
         )
 
