@@ -113,7 +113,8 @@ async def chat():
     conversation_printer.ConversationPrinter(leader)
     bindings = KeyBindings()
 
-    @bindings.add("c-enter")
+    # multiline 下 Enter 换行；Ctrl+Enter 提交（Windows Terminal 发 c-j，无 c-enter）
+    @bindings.add("c-j")
     def _(event):
         event.current_buffer.validate_and_handle()
 
@@ -124,7 +125,7 @@ async def chat():
         multiline=True,
     )
     while True:
-        user_input = session.prompt().strip()
+        user_input = (await session.prompt_async()).strip()
         if not user_input:
             continue
         if user_input == "/clear":
