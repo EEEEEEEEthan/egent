@@ -151,10 +151,10 @@ async def chat():
             return f"已提交 v{version}"
         return commit_output or "git 提交成功"
     leader = egent.agent.Agent(
-        name="ethan",
+        name="Egent",
         settings="leader",
         system_prompt=(
-            "你是ethan，你是这个项目的主程\n"
+            "你是Egent，你是这个项目的主程\n"
             "用户是资深程序员，也是制作人，沟通时不需要解释太多\n"
             "如果他让你修改项目,你需要提出方案.你提出方案之后需要和他核对,在他明确表达可以开始执行了你才可以开始执行\n"
             "你给出的方案应该措辞精炼,不要说废话.以最简洁的方式给出方案.\n"

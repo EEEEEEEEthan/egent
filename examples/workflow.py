@@ -120,17 +120,6 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
 
         self.__blackboard_tools = (read_blackboard, rewrite_blackboard)
 
-        developer_system_prompt = (
-            "你是开发工程师，负责根据描述开发代码。"
-            "开发过程中可用 run_regression_test 验证与你本次改动相关的测试."
-            "你需要跑的测试有pylint和你的修改对应的测试.提交后会自动进行全量回归测试。"
-            "你的队友是代码审查员 Reviewer，他会审查你的代码。"
-            "你们之间有一个共享黑板（blackboard），是一块最多"
-            f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
-            "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
-            + _CODING_PRINCIPLE
-            + "编码完成后会有代码整理环节，届时直接输出即可，无需调用 submit。\n"
-        )
         editable_rule = egent.builtin_tools.path_validator.PathPermissionRule(
             whitelist=(f"{_WORKING_DIRECTORY}/*",),
             blacklist=(
@@ -141,7 +130,17 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         self.__coder = egent.agent.Agent(
             name="Leo",
             settings="coder",
-            system_prompt=developer_system_prompt,
+            system_prompt=(
+                "你是Leo,这个项目的开发工程师，负责根据描述开发代码。"
+                "开发过程中可用 run_regression_test 验证与你本次改动相关的测试."
+                "你需要跑的测试有pylint和你的修改对应的测试.提交后会自动进行全量回归测试。"
+                "你的队友是代码审查员 Reviewer，他会审查你的代码。"
+                "你们之间有一个共享黑板（blackboard），是一块最多"
+                f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
+                "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
+                + _CODING_PRINCIPLE
+                + "编码完成后会有代码整理环节，届时直接输出即可，无需调用 submit。\n"
+            ),
             tools=(submit, run_regression_test, *self.__blackboard_tools),
         )
         self.__coder.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
@@ -285,19 +284,17 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             nonlocal submit_result
             submit_result = (success, report)
             return "已提交"
-
-        reviewer_system_prompt = (
-            "你是代码审查员，负责审查开发工程师的代码是否符合需求。"
-            "你的队友是开发工程师 Leo，他负责编写代码。"
-            "你们之间有一个共享黑板（blackboard），是一块最多"
-            f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
-            "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
-            + _CODING_PRINCIPLE
-        )
         reviewer = egent.agent.Agent(
-            name="Reviewer",
+            name="Ray",
             settings="reviewer",
-            system_prompt=reviewer_system_prompt,
+            system_prompt=(
+                "你是Ray,这个项目的代码审查员，负责审查开发工程师的代码是否符合需求。"
+                "你的队友是开发工程师 Leo，他负责编写代码。"
+                "你们之间有一个共享黑板（blackboard），是一块最多"
+                f"{_BLACKBOARD_MAX_CHARS}字符的共享内存空间，"
+                "用于在编码和审查环节之间传递上下文信息。鼓励多用黑板传递信息。"
+                + _CODING_PRINCIPLE
+            ),
             tools=(submit, *self.__blackboard_tools),
         )
         reviewer.path_permissions = egent.builtin_tools.path_validator.PathPermissions(
