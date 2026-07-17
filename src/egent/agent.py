@@ -24,6 +24,7 @@ import egent.builtin_tools.file_system_tools
 import egent.builtin_tools.memory_tools
 import egent.builtin_tools.path_validator
 import egent.builtin_tools.skill_tools
+import egent.builtin_tools.web_search_tools
 import egent.ephemeral_dirs
 import egent._constants
 import egent.model_settings
@@ -163,6 +164,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions()
         self.__file_system_tool_set.path_permissions = self.__path_permissions
         self.__memory_tool_set = egent.builtin_tools.memory_tools.MemoryToolSet(self.name)
+        self.__web_search_tool_set = egent.builtin_tools.web_search_tools.WebSearchToolSet()
         self.__path_permissions_text = self.__path_permissions.format_rules()
         self.__messages: list[ChatMessage] = []
         self.__is_busy = False
@@ -191,6 +193,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 *(
                     egent.tool.as_builtin_tool(tool_callable)
                     for tool_callable in self.__memory_tool_set.tools
+                ),
+                *(
+                    egent.tool.as_builtin_tool(tool_callable)
+                    for tool_callable in self.__web_search_tool_set.tools
                 ),
                 *tools,
             ],

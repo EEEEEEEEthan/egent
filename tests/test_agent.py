@@ -1,6 +1,6 @@
 """agent 单元测试。"""
 
-# pylint: disable=protected-access
+# pylint: disable=protected-access,no-member
 
 from __future__ import annotations
 
@@ -505,13 +505,7 @@ async def test_fetch_chat_completion_emits_reasoning_delta(monkeypatch) -> None:
     class FakeStream:
         """模拟带 reasoning_content 的流式响应。"""
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args: object) -> None:
-            return None
-
-        def __aiter__(self):
+        def __init__(self) -> None:
             self._events = [
                 SimpleNamespace(
                     type="chunk",
@@ -526,9 +520,18 @@ async def test_fetch_chat_completion_emits_reasoning_delta(monkeypatch) -> None:
                 SimpleNamespace(type="content.delta", delta="你好"),
             ]
             self._index = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        def __aiter__(self):
             return self
 
         async def __anext__(self) -> SimpleNamespace:
+            """返回下一个流式事件。"""
             if self._index >= len(self._events):
                 raise StopAsyncIteration
             event = self._events[self._index]
@@ -536,6 +539,7 @@ async def test_fetch_chat_completion_emits_reasoning_delta(monkeypatch) -> None:
             return event
 
         async def get_final_completion(self) -> SimpleNamespace:
+            """返回最终补全结果。"""
             return SimpleNamespace(
                 choices=[
                     SimpleNamespace(
@@ -567,4 +571,3 @@ async def test_fetch_chat_completion_emits_reasoning_delta(monkeypatch) -> None:
 
     assert reasoning_deltas == ["思考中"]
     assert text_deltas == ["你好"]
-

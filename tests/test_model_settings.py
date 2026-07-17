@@ -1,5 +1,7 @@
 """model_settings 单元测试。"""
 
+# pylint: disable=no-member
+
 from __future__ import annotations
 
 import pytest
