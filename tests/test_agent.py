@@ -258,7 +258,7 @@ async def test_send_notifies_when_path_permissions_change(monkeypatch) -> None:
         ),
     )
 
-    async def fake_fetch_chat_completion() -> SimpleNamespace:
+    async def fake_fetch_chat_completion(_reasoning_effort: str | None = None) -> SimpleNamespace:
         return _ok_completion()
 
     monkeypatch.setattr(agent, "_Agent__fetch_chat_completion", fake_fetch_chat_completion)
@@ -325,7 +325,7 @@ async def test_send_runs_all_tool_calls_before_conversation_terminating_tool(mon
                 },
             }
 
-    async def fake_fetch_chat_completion() -> SimpleNamespace:
+    async def fake_fetch_chat_completion(_reasoning_effort: str | None = None) -> SimpleNamespace:
         nonlocal fetch_count
         fetch_count += 1
         if fetch_count == 1:
@@ -378,7 +378,7 @@ async def test_send_blocks_concurrent_send_and_add_message(monkeypatch) -> None:
     agent = egent.agent.Agent(settings="test")
     send_entered = False
 
-    async def fake_fetch_chat_completion() -> SimpleNamespace:
+    async def fake_fetch_chat_completion(_reasoning_effort: str | None = None) -> SimpleNamespace:
         nonlocal send_entered
         send_entered = True
         with pytest.raises(RuntimeError, match="不能 add_message"):
@@ -410,7 +410,7 @@ async def test_send_message_adds_and_sends(monkeypatch) -> None:
 
     agent = egent.agent.Agent(settings="test")
 
-    async def fake_fetch_chat_completion() -> SimpleNamespace:
+    async def fake_fetch_chat_completion(_reasoning_effort: str | None = None) -> SimpleNamespace:
         user_messages = [
             message["content"]
             for message in agent._Agent__messages
@@ -458,7 +458,7 @@ async def test_await_free_waits_until_send_ends(monkeypatch) -> None:
     agent = _make_test_agent(monkeypatch)
     release_send = asyncio.Event()
 
-    async def fake_fetch_chat_completion() -> SimpleNamespace:
+    async def fake_fetch_chat_completion(_reasoning_effort: str | None = None) -> SimpleNamespace:
         await release_send.wait()
         return _ok_completion()
 

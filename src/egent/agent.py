@@ -265,12 +265,12 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             raise RuntimeError("Agent 正在 send，不能 add_message")
         return self.__add_message(role, self.__truncate_message_content(role, content), **extra)
 
-    async def send_message(self, role: ChatRole, content: str, **extra: Any) -> str:
+    async def send_message(self, role: ChatRole, content: str, reasoning_effort: str | None = None, **extra: Any) -> str:
         """追加一条消息并立即请求助手回复。"""
         self.add_message(role, content, **extra)
-        return await self.send()
+        return await self.send(reasoning_effort=reasoning_effort)
 
-    async def send(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    async def send(self, reasoning_effort: str | None = None) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """根据当前历史请求助手回复，必要时自动执行工具并续聊直至结束。"""
         if self.__is_busy:
             raise RuntimeError("Agent 正在 send，不能重复 send")
@@ -278,16 +278,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         try:
             if self.__tokens >= self.auto_summarize_threshold:
                 await self.summarize()
-            return await self.__send_loop()
+            return await self.__send_loop(reasoning_effort=reasoning_effort)
         finally:
             async with self.__busy_condition:
                 self.__is_busy = False
                 self.__busy_condition.notify_all()
 
-    async def __send_loop(self) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    async def __send_loop(self, reasoning_effort: str | None = None) -> str:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         while True:
             self.__sync_path_permissions_notice()
-            completion = await self.__run_with_network_retry(self.__fetch_chat_completion)
+            completion = await self.__run_with_network_retry(lambda: self.__fetch_chat_completion(reasoning_effort))
             usage = getattr(completion, 'usage', None)
             if usage is not None:
                 self.__tokens = usage.total_tokens
@@ -492,14 +492,16 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         assert last_error is not None
         raise last_error
 
-    async def __fetch_chat_completion(self) -> Any:
+    async def __fetch_chat_completion(self, reasoning_effort: str | None = None) -> Any:
         """流式请求 Chat Completion；工具参数解析失败时回退为非流式。"""
+        extra_body = {"reasoning_effort": reasoning_effort} if reasoning_effort is not None else None
         try:
             async with self.__client.chat.completions.stream(
                 model=self.model,
                 messages=self.__messages,
                 tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
                 stream_options={"include_usage": True},
+                extra_body=extra_body,
             ) as stream:
                 async for event in stream:
                     if event.type == "content.delta":
@@ -511,6 +513,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 model=self.model,
                 messages=self.__messages,
                 tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
+                extra_body=extra_body,
             )
             reply_text = (response.choices[0].message.content or "").strip()
             if reply_text:
