@@ -176,6 +176,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         Path(self.__task_path).write_text(description, encoding="utf-8")
         Path(self.__log_path).write_text("", encoding="utf-8")
         self.__dev_log(f"开始开发工作流: {self.__title}", description)
+        shell_tools.run_command("git", "add", "-A")
         for _ in range(10):
             for _ in range(10):
                 self.__dev_log("开始编码")
@@ -306,10 +307,12 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         )
         for _ in range(5):
             submit_result = None
+            untracked = shell_tools.run_command("git", "ls-files", "-o", "--exclude-standard")[1]
+            diff_out = shell_tools.run_command("git", "diff")[1]
             diff_path = Path(f".egent/.temp/task-{self.task_id}-diff.txt")
             diff_path.write_text(
-                shell_tools.run_command("git", "diff")[1]
-                or "没有 diff（工作区干净，或没有可展示的变更）",
+                f"=== 未跟踪文件 ===\n{untracked}\n{diff_out}" if untracked
+                else (diff_out or "没有 diff（工作区干净，或没有可展示的变更）"),
                 encoding="utf-8",
             )
             reviewer.add_message(
