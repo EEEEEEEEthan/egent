@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+import traceback
 from dataclasses import dataclass
 from html.parser import HTMLParser
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -23,7 +27,9 @@ class WebToolSet:
         except ImportError:
             return "搜索失败：需要安装 duckduckgo-search"
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            return f"搜索失败：{exc}"
+            tb = traceback.format_exc().rstrip()
+            _logger.warning("搜索失败:\n%s", tb)
+            return f"搜索失败：{exc}\n{tb}"
 
         if not results:
             return "(无搜索结果)"
@@ -62,7 +68,9 @@ class WebToolSet:
         except ImportError:
             return "抓取失败：需要安装 httpx"
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            return f"抓取失败：{exc}"
+            tb = traceback.format_exc().rstrip()
+            _logger.warning("抓取失败:\n%s", tb)
+            return f"抓取失败：{exc}\n{tb}"
 
         if not text:
             return "(页面内容为空)"

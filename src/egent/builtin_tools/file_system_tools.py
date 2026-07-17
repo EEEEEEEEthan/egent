@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import fnmatch
+import logging
 import re
 import shutil
 import time
+import traceback
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +17,8 @@ import egent._line_position
 import egent.builtin_tools.path_validator
 import egent._constants
 import egent.tool
+
+_logger = logging.getLogger(__name__)
 
 __all__ = ["FileSystemToolSet"]
 
@@ -117,6 +121,7 @@ class FileSystemToolSet:
                     key=lambda entry_path: (not entry_path.is_dir(), entry_path.name.lower()),
                 )
             except OSError:
+                _logger.warning("访问目录失败 %s:\n%s", directory_path, traceback.format_exc().rstrip())
                 return
             for entry_path in entries:
                 if timed_out or time.monotonic() >= deadline_monotonic:
@@ -487,6 +492,7 @@ class FileSystemToolSet:
                     if regex.search(line_text):
                         yield line_number, line_text
         except (UnicodeDecodeError, OSError):
+            _logger.warning("读取文件失败 %s:\n%s", resolved_path, traceback.format_exc().rstrip())
             return False
         return False
 

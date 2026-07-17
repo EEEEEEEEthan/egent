@@ -374,6 +374,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                     if isinstance(handler_result, Awaitable):
                         handler_result = await handler_result
                 except Exception:  # pylint: disable=broad-exception-caught
+                    _logger.error("工具调用异常:\n%s", traceback.format_exc().rstrip())
                     handler_result = traceback.format_exc().rstrip("\n")
                     is_exception = True
                 else:

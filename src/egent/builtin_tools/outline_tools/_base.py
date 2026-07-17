@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from abc import abstractmethod
 from typing import ClassVar
+
+_logger = logging.getLogger(__name__)
 
 
 class OutlineParser:
@@ -16,7 +19,10 @@ class OutlineParser:
         try:
             return self.parse_lines(text.splitlines())
         except Exception:  # pylint: disable=broad-exception-caught
-            return "解析失败"
+            import traceback  # pylint: disable=import-outside-toplevel
+            tb = traceback.format_exc().rstrip()
+            _logger.warning("大纲解析失败:\n%s", tb)
+            return f"解析失败\n{tb}"
 
     @staticmethod
     @abstractmethod

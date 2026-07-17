@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shlex
 import subprocess
 import sys
@@ -9,6 +10,8 @@ import traceback
 from pathlib import Path
 
 import egent.builtin_tools.command_utils
+
+_logger = logging.getLogger(__name__)
 
 __all__ = ["execute_pytest", "run_regression_test"]
 
@@ -25,6 +28,7 @@ def execute_pytest(targets: list[str] | None = None) -> tuple[bool, str]:
             check=False,
         )
     except OSError:
+        _logger.warning("执行 pytest 失败:\n%s", traceback.format_exc().rstrip())
         return False, traceback.format_exc().rstrip("\n")
     output = egent.builtin_tools.command_utils.format_command_result(
         result.stdout,
