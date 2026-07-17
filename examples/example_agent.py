@@ -13,6 +13,9 @@ import traceback
 from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
 
 import conversation_printer
 import shell_tools
@@ -108,8 +111,20 @@ async def chat():
     )
     leader.add_message("system", f"日志文件路径: {egent.agent.get_log_path()}")
     conversation_printer.ConversationPrinter(leader)
+    bindings = KeyBindings()
+
+    @bindings.add("c-enter")
+    def _(event):
+        event.current_buffer.validate_and_handle()
+
+    session = PromptSession(
+        ">>> ",
+        key_bindings=bindings,
+        history=FileHistory(".example_agent_history"),
+        multiline=True,
+    )
     while True:
-        user_input = input(">>> ").strip()
+        user_input = session.prompt().strip()
         if not user_input:
             continue
         if user_input == "/clear":
