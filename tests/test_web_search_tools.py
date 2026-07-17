@@ -1,12 +1,12 @@
 """Web 搜索/抓取工具单元测试。"""
 
-# pylint: disable=protected-access,import-error,no-name-in-module,no-member,redefined-outer-name
+# pylint: disable=protected-access,import-error,no-name-in-module,no-member,redefined-outer-name,unused-argument
 
 from __future__ import annotations
 
 import sys
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import pytest

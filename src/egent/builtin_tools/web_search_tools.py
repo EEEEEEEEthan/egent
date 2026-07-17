@@ -6,25 +6,6 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 
 
-class _TextExtractor(HTMLParser):
-    """用 html.parser 剥标签，积累纯文本。"""
-
-    def __init__(self) -> None:
-        """初始化文本提取器。"""
-        super().__init__()
-        self._text_parts: list[str] = []
-
-    def handle_data(self, data: str) -> None:
-        self._text_parts.append(data)
-
-    def text(self) -> str:
-        """返回累积的纯文本。"""
-        return "".join(self._text_parts).strip()
-
-
-_MAX_FETCH_CHARS = 10000
-
-
 @dataclass
 class WebToolSet:
     """基于 DuckDuckGo 的零配置 Web 搜索 + 页面抓取工具集。"""
@@ -61,9 +42,9 @@ class WebToolSet:
         """GET 指定 URL，将 HTML 转为纯文本返回。
 
         @param url 要抓取的页面地址
-        @return 纯文本内容，最长 {_MAX_FETCH_CHARS} 字符
+        @return 纯文本内容，最长 10000 字符
         """
-        # pylint: disable=import-outside-toplevel
+        # pylint: disable=import-outside-toplevel,missing-class-docstring
         try:
             import httpx
             response = httpx.get(url, timeout=30.0, follow_redirects=True)
@@ -72,9 +53,12 @@ class WebToolSet:
             if "text/" not in content_type and "html" not in content_type:
                 text = response.text
             else:
-                extractor = _TextExtractor()
-                extractor.feed(response.text)
-                text = extractor.text()
+                parts: list[str] = []
+                class _P(HTMLParser):
+                    def handle_data(self, data):
+                        parts.append(data)
+                _P().feed(response.text)
+                text = "".join(parts).strip()
         except ImportError:
             return "抓取失败：需要安装 httpx"
         except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -83,8 +67,8 @@ class WebToolSet:
         if not text:
             return "(页面内容为空)"
 
-        if len(text) > _MAX_FETCH_CHARS:
-            text = text[:_MAX_FETCH_CHARS] + "\n\n…（内容截断）"
+        if len(text) > 10000:
+            text = text[:10000] + "\n\n…（内容截断）"
         return text
 
     @property
