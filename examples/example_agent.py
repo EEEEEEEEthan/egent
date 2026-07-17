@@ -115,7 +115,7 @@ async def chat():
         if user_input == "/clear":
             break
         leader.add_message("user", user_input)
-        await leader.send()
+        await leader.send(reasoning_effort="high")
         pct = leader.tokens / leader.auto_summarize_threshold * 100
         print(f"[tokens({leader.name}): {leader.tokens/1000:.1f}k, {pct:.0f}%]")
         hot_reload(leader)

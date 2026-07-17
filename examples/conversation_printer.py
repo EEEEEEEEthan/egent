@@ -36,7 +36,7 @@ class ConversationPrinter:
 
     async def send(self) -> None:
         """执行一轮请求并打印流式输出。"""
-        await self._agent.send()
+        await self._agent.send(reasoning_effort="high")
 
     def __print(self, text: str, *, end: str = "\n") -> None:
         payload = f"{text}{end}"

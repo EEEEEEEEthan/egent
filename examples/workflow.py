@@ -76,6 +76,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         self.__coding_submit_hook: Callable[[bool, str], None] | None = None
         self.__blackboard = ""
         self.__assigned = 0
+        self.__reasoning_effort: str = "medium"
 
         def run_regression_test(targets: str) -> str:  # pylint: disable=redefined-outer-name
             """placeholder"""
@@ -163,8 +164,11 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if content:
             print(content)
 
-    async def assign(self, description: str, title: str) -> tuple[bool, str]:
-        """按描述启动开发工作流，返回 (成功与否, 报告)。"""
+    async def assign(self, description: str, title: str, reasoning_effort: str = "medium") -> tuple[bool, str]:
+        """按描述启动开发工作流，返回 (成功与否, 报告)。
+        @param reasoning_effort: 推理力度，可选 low/medium/high，默认 medium
+        """
+        self.__reasoning_effort = reasoning_effort
         self.__title = title
         self.__assigned += 1
         if self.__assigned >= 2:
@@ -201,6 +205,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                 summary = await self.__coder.send_message(
                     "user",
                     "测试和审查都通过.开发工作结束了.请为本次开发工作做一个简报.(直接输出即可,不要使用submit工具)",
+                    reasoning_effort=self.__reasoning_effort,
                 )
                 self.__dev_log("开发工作简报如下:", summary)
                 return True, summary
@@ -233,7 +238,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                         "可以用 __bt_read_blackboard 和 __bt_rewrite_blackboard 读写黑板，与审查员传递信息。"
                     ),
                 )
-                await self.__coder.send()
+                await self.__coder.send(reasoning_effort=self.__reasoning_effort)
                 if submit_result is not None:
                     success, report = submit_result
                     if success:
@@ -260,6 +265,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             "刚才的编码已完成。现在请按照编码原则（最小域原则、减少成员原则、最佳实现原则、私有方法命名原则）"
             "整理你刚才写的代码，使其更优雅紧凑，但不改变功能行为。"
             "直接输出整理说明即可，不需要调用 submit。",
+            reasoning_effort=self.__reasoning_effort,
         )
         self.__dev_log("代码整理完成,简报如下:", tidy_report)
         pct = self.__coder.tokens / self.__coder.auto_summarize_threshold * 100
@@ -322,7 +328,7 @@ class Workflow:  # pylint: disable=too-few-public-methods,too-many-instance-attr
                     "- 有没有更优雅的实现\n"
                 ),
             )
-            await reviewer.send()
+            await reviewer.send(reasoning_effort=self.__reasoning_effort)
             if submit_result is not None:
                 pct = reviewer.tokens / reviewer.auto_summarize_threshold * 100
                 print(f"[tokens({reviewer.name}): {reviewer.tokens/1000:.1f}k, {pct:.0f}%]")
