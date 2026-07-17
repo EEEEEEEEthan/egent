@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import asyncio
 import re
+import sys
 import traceback
 from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.key_processor import KeyPress
+from prompt_toolkit.keys import Keys
 
 import conversation_printer
 import shell_tools
@@ -25,9 +29,63 @@ import egent.builtin_tools.path_validator
 import egent.builtin_tools.test_tools
 from examples import hot_reload
 
+# 内部键：终端可区分的 Shift+Enter 映射到此，再绑成换行
+_SHIFT_ENTER = Keys.F23
+
+
+def _patch_shift_enter() -> None:
+    """把可区分的 Shift+Enter 收成内部键，避免被折成普通 Enter。"""
+    ANSI_SEQUENCES["\x1b[27;2;13~"] = _SHIFT_ENTER  # xterm CSI 27
+    ANSI_SEQUENCES["\x1b[13;2u"] = _SHIFT_ENTER  # CSI u
+
+    if sys.platform != "win32":
+        return
+
+    import prompt_toolkit.input.win32 as win32_input
+
+    reader_type = win32_input.ConsoleInputReader
+    if getattr(reader_type, "_egent_shift_enter_patched", False):
+        return
+
+    original = reader_type._event_to_key_presses
+
+    def _event_to_key_presses(self, key_event):  # noqa: ANN001
+        presses = original(self, key_event)
+        shift_pressed = key_event.ControlKeyState & self.SHIFT_PRESSED
+        ctrl_pressed = key_event.ControlKeyState & (
+            self.LEFT_CTRL_PRESSED | self.RIGHT_CTRL_PRESSED
+        )
+        if (
+            shift_pressed
+            and not ctrl_pressed
+            and len(presses) == 1
+            and presses[0].key in (Keys.ControlM, Keys.ControlJ)
+        ):
+            return [KeyPress(_SHIFT_ENTER, "")]
+        return presses
+
+    reader_type._event_to_key_presses = _event_to_key_presses  # type: ignore[method-assign]
+    reader_type._egent_shift_enter_patched = True  # type: ignore[attr-defined]
+
+
+def _make_input_bindings() -> KeyBindings:
+    bindings = KeyBindings()
+
+    @bindings.add("enter", eager=True)
+    def _submit(event) -> None:
+        event.current_buffer.validate_and_handle()
+
+    @bindings.add(_SHIFT_ENTER, eager=True)
+    @bindings.add("c-j", eager=True)  # 终端无法区分 Shift+Enter 时的可靠换行
+    def _newline(event) -> None:
+        event.current_buffer.insert_text("\n")
+
+    return bindings
+
 
 async def run() -> int:
     """运行交互式聊天，返回进程退出码。"""
+    _patch_shift_enter()
     try:
         while True:
             await chat()
@@ -111,16 +169,9 @@ async def chat():
     )
     leader.add_message("system", f"日志文件路径: {egent.agent.get_log_path()}")
     conversation_printer.ConversationPrinter(leader)
-    bindings = KeyBindings()
-
-    # multiline 下 Enter 换行；Ctrl+Enter 提交（Windows Terminal 发 c-j，无 c-enter）
-    @bindings.add("c-j")
-    def _(event):
-        event.current_buffer.validate_and_handle()
-
     session = PromptSession(
         ">>> ",
-        key_bindings=bindings,
+        key_bindings=_make_input_bindings(),
         history=FileHistory(".example_agent_history"),
         multiline=True,
     )
