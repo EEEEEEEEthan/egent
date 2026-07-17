@@ -28,7 +28,7 @@ def execute_pytest(targets: list[str] | None = None) -> tuple[bool, str]:
             check=False,
         )
     except OSError:
-        _logger.warning("执行 pytest 失败:\n%s", traceback.format_exc().rstrip())
+        _logger.error("执行 pytest 失败:\n%s", traceback.format_exc().rstrip())
         return False, traceback.format_exc().rstrip("\n")
     output = egent.builtin_tools.command_utils.format_command_result(
         result.stdout,

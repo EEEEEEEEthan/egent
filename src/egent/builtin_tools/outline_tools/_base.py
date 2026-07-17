@@ -21,7 +21,7 @@ class OutlineParser:
         except Exception:  # pylint: disable=broad-exception-caught
             import traceback  # pylint: disable=import-outside-toplevel
             tb = traceback.format_exc().rstrip()
-            _logger.warning("大纲解析失败:\n%s", tb)
+            _logger.error("大纲解析失败:\n%s", tb)
             return f"解析失败\n{tb}"
 
     @staticmethod

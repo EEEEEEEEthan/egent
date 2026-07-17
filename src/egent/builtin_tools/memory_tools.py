@@ -71,7 +71,7 @@ class MemoryToolSet:
                 content = md_file.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 import traceback  # pylint: disable=import-outside-toplevel
-                _logger.warning("读取记忆文件失败 %s:\n%s", md_file, traceback.format_exc().rstrip())
+                _logger.error("读取记忆文件失败 %s:\n%s", md_file, traceback.format_exc().rstrip())
                 continue
             ts = _parse_timestamp(content) or "很久以前"
             if regex.search(md_file.name):

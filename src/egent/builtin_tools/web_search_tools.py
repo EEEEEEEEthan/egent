@@ -28,7 +28,7 @@ class WebToolSet:
             return "搜索失败：需要安装 duckduckgo-search"
         except Exception as exc:  # pylint: disable=broad-exception-caught
             tb = traceback.format_exc().rstrip()
-            _logger.warning("搜索失败:\n%s", tb)
+            _logger.error("搜索失败:\n%s", tb)
             return f"搜索失败：{exc}\n{tb}"
 
         if not results:
@@ -69,7 +69,7 @@ class WebToolSet:
             return "抓取失败：需要安装 httpx"
         except Exception as exc:  # pylint: disable=broad-exception-caught
             tb = traceback.format_exc().rstrip()
-            _logger.warning("抓取失败:\n%s", tb)
+            _logger.error("抓取失败:\n%s", tb)
             return f"抓取失败：{exc}\n{tb}"
 
         if not text:

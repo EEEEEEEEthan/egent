@@ -530,7 +530,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 last_error = error
                 if attempt_index + 1 >= _REQUEST_RETRY_COUNT:
                     break
-                _logger.warning(
+                _logger.error(
                     "网络请求失败，%.0fs 后重试 (%d/%d): %s",
                     _REQUEST_RETRY_DELAY_SECONDS,
                     attempt_index + 1,
@@ -565,7 +565,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                                 self.__emit_event(ReasoningDelta(reasoning_text))
                 return await stream.get_final_completion()
         except pydantic.ValidationError as error:
-            _logger.warning("流式工具参数解析失败，回退为非流式请求: %s", error)
+            _logger.error("流式工具参数解析失败，回退为非流式请求: %s", error)
             response = await self.__client.chat.completions.create(
                 model=self.model,
                 messages=self.__messages,
