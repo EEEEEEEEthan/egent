@@ -4,9 +4,22 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\x00]')
+_TIMESTAMP_LINE_RE = re.compile(r'^>\s*timestamp:\s*(.*)', re.IGNORECASE)
+
+
+def _prepend_timestamp(content: str) -> str:
+    return f"> timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n{content}"
+
+
+def _parse_timestamp(content: str) -> str | None:
+    """从内容首行解析时间戳，成功返回时间文本，失败返回 None。"""
+    first_line = content.splitlines()[0] if content.splitlines() else ""
+    match = _TIMESTAMP_LINE_RE.match(first_line)
+    return match.group(1).strip() if match else None
 
 
 @dataclass
@@ -30,7 +43,7 @@ class MemoryToolSet:
         file_path = memory_dir / f"{_INVALID_FILENAME_CHARS.sub('_', title)}.md"
         if file_path.exists():
             raise FileExistsError(f"记忆已存在：{title}")
-        file_path.write_text(content, encoding="utf-8")
+        file_path.write_text(_prepend_timestamp(content), encoding="utf-8")
         return f"已创建记忆：{title}"
 
     def memory_recall(self, pattern: str) -> str:
@@ -51,15 +64,16 @@ class MemoryToolSet:
         for md_file in sorted(memory_dir.glob("*.md")):
             if not md_file.is_file():
                 continue
-            name = md_file.name
-            if regex.search(name):
-                matched.append(f"[{name}] (文件名匹配)")
             try:
-                for i, line in enumerate(md_file.read_text(encoding="utf-8").splitlines(), 1):
-                    if regex.search(line):
-                        matched.append(f"[{name} line{i}] {line}")
+                content = md_file.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
+            ts = _parse_timestamp(content) or "未知时间"
+            if regex.search(md_file.name):
+                matched.append(f"[{ts}] (文件名匹配)")
+            for line in content.splitlines():
+                if regex.search(line):
+                    matched.append(f"[{ts}] {line}")
         return "\n".join(matched) if matched else "(无匹配)"
 
     def memory_update(self, title: str, content: str) -> str:
@@ -71,7 +85,7 @@ class MemoryToolSet:
         file_path = self.__memory_dir / f"{_INVALID_FILENAME_CHARS.sub('_', title)}.md"
         if not file_path.exists():
             raise FileNotFoundError(f"记忆不存在：{title}")
-        file_path.write_text(content, encoding="utf-8")
+        file_path.write_text(_prepend_timestamp(content), encoding="utf-8")
         return f"已更新记忆：{title}"
 
     def memory_forget(self, title: str) -> str:
@@ -93,7 +107,11 @@ class MemoryToolSet:
         file_path = self.__memory_dir / f"{_INVALID_FILENAME_CHARS.sub('_', title)}.md"
         if not file_path.exists():
             raise FileNotFoundError(f"记忆不存在：{title}")
-        return file_path.read_text(encoding="utf-8")
+        content = file_path.read_text(encoding="utf-8")
+        ts = _parse_timestamp(content)
+        if ts is not None:
+            return "\n".join([ts, *content.splitlines()[1:]])
+        return f"未知时间\n{content}"
 
     @property
     def list_titles(self) -> list[str]:

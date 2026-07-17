@@ -6,6 +6,7 @@ import asyncio
 import logging
 import pathlib
 from pathlib import Path
+import platform
 import re
 import traceback
 import uuid
@@ -20,6 +21,7 @@ import pydantic
 from openai import NOT_GIVEN, APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
 
 import egent._line_position
+import egent.builtin_tools.env_tools
 import egent.builtin_tools.file_system_tools
 import egent.builtin_tools.memory_tools
 import egent.builtin_tools.path_validator
@@ -165,6 +167,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         self.__file_system_tool_set.path_permissions = self.__path_permissions
         self.__memory_tool_set = egent.builtin_tools.memory_tools.MemoryToolSet(self.name)
         self.__web_search_tool_set = egent.builtin_tools.web_search_tools.WebToolSet()
+        self.__env_tool_set = egent.builtin_tools.env_tools.EnvToolSet()
         self.__path_permissions_text = self.__path_permissions.format_rules()
         self.__messages: list[ChatMessage] = []
         self.__is_busy = False
@@ -198,6 +201,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                     egent.tool.as_builtin_tool(tool_callable)
                     for tool_callable in self.__web_search_tool_set.tools
                 ),
+                *(
+                    egent.tool.as_builtin_tool(tool_callable)
+                    for tool_callable in self.__env_tool_set.tools
+                ),
                 *tools,
             ],
         )
@@ -215,6 +222,12 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 "查询已有信息时先 __bt_memory_recall 检索，注意记忆可能信息迟滞，需自行判断时效性。"
                 "工具: __bt_memory_remember(新建)、__bt_memory_recall(搜索)、__bt_memory_read(阅读完整记忆)、__bt_memory_update(更新)、__bt_memory_forget(删除)。"
             )
+        system_sections.append(
+            f"操作系统信息: {platform.system()} {platform.release()}"
+        )
+        system_sections.append(
+            "可用 `__bt_get_current_time` 获取当前时间，不要自己猜时间。"
+        )
         if system_sections:
             self.__add_message("system", "\n\n".join(system_sections))
 
