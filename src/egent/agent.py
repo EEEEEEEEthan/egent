@@ -91,6 +91,13 @@ class TextDelta(AgentEvent):
 
 
 @dataclass(frozen=True)
+class ReasoningDelta(AgentEvent):
+    """LLM 推理过程的文本增量（reasoning_content）。"""
+
+    text: str
+
+
+@dataclass(frozen=True)
 class ToolCallStarted(AgentEvent):
     """工具调用即将执行。"""
 
@@ -151,6 +158,7 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             base_url=model_settings.base_url,
         )
         self.model = model_settings.model_name
+        self.__thinking_mode = model_settings.thinking_mode
         self.__file_system_tool_set = egent.builtin_tools.file_system_tools.FileSystemToolSet()
         self.__path_permissions = egent.builtin_tools.path_validator.PathPermissions()
         self.__file_system_tool_set.path_permissions = self.__path_permissions
@@ -494,7 +502,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
 
     async def __fetch_chat_completion(self, reasoning_effort: str | None = None) -> Any:
         """流式请求 Chat Completion；工具参数解析失败时回退为非流式。"""
-        extra_body = {"reasoning_effort": reasoning_effort} if reasoning_effort is not None else None
+        extra_body = egent.model_settings.build_thinking_extra_body(
+            self.__thinking_mode,
+            reasoning_effort,
+        )
         try:
             async with self.__client.chat.completions.stream(
                 model=self.model,
@@ -506,6 +517,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 async for event in stream:
                     if event.type == "content.delta":
                         self.__emit_event(TextDelta(event.delta))
+                    elif event.type == "chunk":
+                        for choice in event.chunk.choices:
+                            reasoning_text = getattr(choice.delta, "reasoning_content", None)
+                            if reasoning_text:
+                                self.__emit_event(ReasoningDelta(reasoning_text))
                 return await stream.get_final_completion()
         except pydantic.ValidationError as error:
             _logger.warning("流式工具参数解析失败，回退为非流式请求: %s", error)
@@ -516,6 +532,9 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 extra_body=extra_body,
             )
             reply_text = (response.choices[0].message.content or "").strip()
+            reasoning_text = getattr(response.choices[0].message, "reasoning_content", None)
+            if reasoning_text:
+                self.__emit_event(ReasoningDelta(reasoning_text))
             if reply_text:
                 self.__emit_event(TextDelta(reply_text))
             return response

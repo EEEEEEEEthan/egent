@@ -26,6 +26,7 @@ def test_agent_clone_copies_messages_without_listeners(monkeypatch) -> None:
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
@@ -106,6 +107,7 @@ def test_agent_composes_system_prompt_with_skill_catalog(monkeypatch, tmp_path) 
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
     skill_dir = tmp_path / "demo-skill"
@@ -136,6 +138,7 @@ def test_agent_includes_builtin_file_tools(monkeypatch) -> None:
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
@@ -158,6 +161,7 @@ async def test_fetch_chat_completion_falls_back_on_tool_argument_validation_erro
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
@@ -282,6 +286,7 @@ async def test_send_runs_all_tool_calls_before_conversation_terminating_tool(mon
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
@@ -372,6 +377,7 @@ async def test_send_blocks_concurrent_send_and_add_message(monkeypatch) -> None:
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
@@ -405,6 +411,7 @@ async def test_send_message_adds_and_sends(monkeypatch) -> None:
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
@@ -433,6 +440,7 @@ def _make_test_agent(monkeypatch) -> egent.agent.Agent:
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
     return egent.agent.Agent(settings="test")
@@ -476,3 +484,87 @@ async def test_await_free_waits_until_send_ends(monkeypatch) -> None:
     await send_task
     await wait_task
     assert not agent.busy
+
+
+@pytest.mark.asyncio
+async def test_fetch_chat_completion_emits_reasoning_delta(monkeypatch) -> None:
+    """流式 reasoning_content 应发出 ReasoningDelta 事件。"""
+    monkeypatch.setattr(
+        "egent.model_settings.ModelSettings.load",
+        lambda _profile: SimpleNamespace(
+            api_key="test",
+            base_url="http://localhost",
+            model_name="test-model",
+            thinking_mode="none",
+        ),
+    )
+
+    agent = egent.agent.Agent(settings="test")
+    agent.add_message("user", "hello")
+
+    class FakeStream:
+        """模拟带 reasoning_content 的流式响应。"""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        def __aiter__(self):
+            self._events = [
+                SimpleNamespace(
+                    type="chunk",
+                    chunk=SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                delta=SimpleNamespace(reasoning_content="思考中"),
+                            ),
+                        ],
+                    ),
+                ),
+                SimpleNamespace(type="content.delta", delta="你好"),
+            ]
+            self._index = 0
+            return self
+
+        async def __anext__(self) -> SimpleNamespace:
+            if self._index >= len(self._events):
+                raise StopAsyncIteration
+            event = self._events[self._index]
+            self._index += 1
+            return event
+
+        async def get_final_completion(self) -> SimpleNamespace:
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="你好", tool_calls=None),
+                    ),
+                ],
+                usage=None,
+            )
+
+    monkeypatch.setattr(
+        agent._Agent__client.chat.completions,
+        "stream",
+        lambda **_kwargs: FakeStream(),
+    )
+
+    reasoning_deltas: list[str] = []
+    text_deltas: list[str] = []
+    agent.add_listener(
+        lambda event: (
+            reasoning_deltas.append(event.text)
+            if isinstance(event, egent.agent.ReasoningDelta)
+            else text_deltas.append(event.text)
+            if isinstance(event, egent.agent.TextDelta)
+            else None
+        ),
+    )
+
+    await agent._Agent__fetch_chat_completion()
+
+    assert reasoning_deltas == ["思考中"]
+    assert text_deltas == ["你好"]
+

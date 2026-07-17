@@ -109,6 +109,11 @@ python examples/example_agent.py
 - `url` — API 端点
 - `model` — 模型名称
 - `apikey` — API 密钥
+- `thinking` — thinking 参数模式（可选，默认 `none`）：
+  - `none` — 不发送 thinking 参数
+  - `reasoning_effort` — OpenAI o 系列 / 直连 GLM 的 `reasoning_effort`
+  - `enable_thinking` — DashScope/Qwen/GLM 的 `enable_thinking` + `thinking_budget`
+  - `anthropic_thinking` — Anthropic 的 `thinking.budget_tokens`
 
 ## 项目结构
 

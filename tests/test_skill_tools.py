@@ -125,6 +125,7 @@ def test_agent_injects_skill_catalog(tmp_path, monkeypatch) -> None:
             api_key="test",
             base_url="http://localhost",
             model_name="test-model",
+            thinking_mode="none",
         ),
     )
 
