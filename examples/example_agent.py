@@ -15,7 +15,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401  # pylint: disable=unused-import  # 必须在 import egent 之前
 from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
+from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPress
@@ -35,6 +35,7 @@ _SHIFT_ENTER = Keys.F23
 
 def _patch_shift_enter() -> None:
     """把可区分的 Shift+Enter 收成内部键，避免被折成普通 Enter。"""
+    # pylint: disable=protected-access,import-outside-toplevel
     ANSI_SEQUENCES["\x1b[27;2;13~"] = _SHIFT_ENTER  # xterm CSI 27
     ANSI_SEQUENCES["\x1b[13;2u"] = _SHIFT_ENTER  # CSI u
 
@@ -172,7 +173,7 @@ async def chat():
     session = PromptSession(
         ">>> ",
         key_bindings=_make_input_bindings(),
-        history=FileHistory(".example_agent_history"),
+        history=InMemoryHistory(),
         multiline=True,
     )
     while True:
