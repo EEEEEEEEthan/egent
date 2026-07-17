@@ -68,7 +68,7 @@ class MemoryToolSet:
                 content = md_file.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
-            ts = _parse_timestamp(content) or "未知时间"
+            ts = _parse_timestamp(content) or "很久以前"
             if regex.search(md_file.name):
                 matched.append(f"[{ts}] (文件名匹配)")
             for line in content.splitlines():
@@ -111,7 +111,7 @@ class MemoryToolSet:
         ts = _parse_timestamp(content)
         if ts is not None:
             return "\n".join([ts, *content.splitlines()[1:]])
-        return f"未知时间\n{content}"
+        return f"很久以前\n{content}"
 
     @property
     def list_titles(self) -> list[str]:
