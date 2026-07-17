@@ -200,7 +200,7 @@ class FileSystemToolSet:
         column: int | None = None,
         limit: int | None = None,
     ) -> str:
-        """读取指定文件内容
+        """读取指定文件内容.请优先使用 read_file_with_outline 读取大纲,然后再 read_file 读取细节.
 
         @param path 文件路径,如果填相对路径将以当前工作目录为基准
         @param line 起始行号，从 1 开始，缺省 1
@@ -333,7 +333,7 @@ class FileSystemToolSet:
         raise ValueError(f"路径不是文件也不是目录：{path}")
 
     def outline(self, path: str) -> str:
-        """解析文件大纲：提取结构化定义行
+        """解析文件大纲,目前暂时支持.cs, .gd, .md, .py文件.
 
         @param path 文件路径（如果填相对路径将以当前工作目录为基准）
         """
