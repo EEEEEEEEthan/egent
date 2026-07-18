@@ -356,6 +356,44 @@ class FileSystemToolSet:
             return "不支持的文件类型"
         return parser_cls().parse(self._read_utf8_text(resolved, path))
 
+    def move(self, src: str, dst: str) -> str:
+        """移动文件或目录
+
+        @param src 源路径（如果填相对路径将以当前工作目录为基准）
+        @param dst 目标路径（如果填相对路径将以当前工作目录为基准）
+        """
+        resolved_src = egent.builtin_tools.path_validator.resolve_path(src)
+        if self.path_permissions is not None and not (
+            self.path_permissions.is_readable(resolved_src)
+            and self.path_permissions.is_editable(resolved_src)
+        ):
+            raise PermissionError(f"没有权限移动源路径：{src}")
+        if not resolved_src.exists():
+            raise FileNotFoundError(f"路径不存在：{src}")
+        resolved_dst = self._resolve_editable_path(dst)
+        shutil.move(str(resolved_src), str(resolved_dst))
+        return f"已移动：{resolved_src} -> {resolved_dst}"
+
+    def copy(self, src: str, dst: str) -> str:
+        """复制文件或目录
+
+        @param src 源路径（如果填相对路径将以当前工作目录为基准）
+        @param dst 目标路径（如果填相对路径将以当前工作目录为基准）
+        """
+        resolved_src = egent.builtin_tools.path_validator.resolve_path(src)
+        if self.path_permissions is not None and not self.path_permissions.is_readable(
+            resolved_src
+        ):
+            raise PermissionError(f"没有权限复制源路径：{src}")
+        if not resolved_src.exists():
+            raise FileNotFoundError(f"路径不存在：{src}")
+        resolved_dst = self._resolve_editable_path(dst)
+        if resolved_src.is_dir():
+            shutil.copytree(str(resolved_src), str(resolved_dst))
+        else:
+            shutil.copy2(str(resolved_src), str(resolved_dst))
+        return f"已复制：{resolved_src} -> {resolved_dst}"
+
     @property
     def read_tools(self) -> tuple[
         egent.tool.ToolCallable,
@@ -383,8 +421,10 @@ class FileSystemToolSet:
         egent.tool.ToolCallable,
         egent.tool.ToolCallable,
         egent.tool.ToolCallable,
+        egent.tool.ToolCallable,
+        egent.tool.ToolCallable,
     ]:
-        """编辑类工具（创建、追加、编辑、替换、重写、删除）。"""
+        """编辑类工具（创建、追加、编辑、替换、重写、删除、移动、复制）。"""
         return (
             self.create_file,
             self.append_text,
@@ -392,6 +432,8 @@ class FileSystemToolSet:
             self.replace,
             self.rewrite,
             self.delete,
+            self.move,
+            self.copy,
         )
 
     @property
