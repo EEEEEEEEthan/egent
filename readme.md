@@ -110,7 +110,7 @@ python examples/example_agent.py
 - `model` — 模型名称
 - `apikey` — API 密钥
 thinking 格式按 `model` 名自动推断（无需配置）：
-- 名称含 `glm` → `enable_thinking` + 固定 `thinking_budget=4096`
+- 名称含 `glm` → `thinking: {type: enabled, budget_tokens: 4096}`（火山 Coding Plan / Z.AI）
 - 名称含 `deepseek` → `reasoning_effort`
 - 其他 → 不发送 thinking 参数
 

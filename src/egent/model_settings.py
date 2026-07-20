@@ -24,9 +24,9 @@ model = "MODEL_NAME"
 apikey = "OPENAI_KEY"
 """
 
-ThinkingMode = Literal["none", "reasoning_effort", "enable_thinking"]
+# reasoning_effort: DeepSeek 等；thinking: 火山 Coding Plan / Z.AI GLM 的 thinking 对象
+ThinkingMode = Literal["none", "reasoning_effort", "thinking"]
 
-# GLM enable_thinking / 同类接口的固定思考 token 上限
 _THINKING_TOKEN_BUDGET = 4096
 
 
@@ -74,10 +74,10 @@ class ModelSettings:
 
 
 def infer_thinking_mode(model_name: str) -> ThinkingMode:
-    """按模型名推断 thinking 请求格式：GLM → enable_thinking，DeepSeek → reasoning_effort。"""
+    """按模型名推断 thinking 请求格式：GLM → thinking 对象，DeepSeek → reasoning_effort。"""
     model_key = model_name.casefold()
     if "glm" in model_key:
-        return "enable_thinking"
+        return "thinking"
     if "deepseek" in model_key:
         return "reasoning_effort"
     return "none"
@@ -92,9 +92,11 @@ def build_thinking_extra_body(
         return None
     if thinking_mode == "reasoning_effort":
         return {"reasoning_effort": reasoning_effort}
-    if thinking_mode == "enable_thinking":
+    if thinking_mode == "thinking":
         return {
-            "enable_thinking": True,
-            "thinking_budget": _THINKING_TOKEN_BUDGET,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": _THINKING_TOKEN_BUDGET,
+            },
         }
     raise ValueError(f"未知 thinking 模式: {thinking_mode!r}")

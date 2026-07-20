@@ -9,8 +9,8 @@ import egent.model_settings
 
 def test_infer_thinking_mode_from_model_name() -> None:
     """按模型名自动区分 GLM / DeepSeek thinking 格式。"""
-    assert egent.model_settings.infer_thinking_mode("glm-latest") == "enable_thinking"
-    assert egent.model_settings.infer_thinking_mode("GLM-5.1") == "enable_thinking"
+    assert egent.model_settings.infer_thinking_mode("glm-latest") == "thinking"
+    assert egent.model_settings.infer_thinking_mode("GLM-5.1") == "thinking"
     assert egent.model_settings.infer_thinking_mode("deepseek/deepseek-v4-flash") == "reasoning_effort"
     assert egent.model_settings.infer_thinking_mode("gpt-5") == "none"
 
@@ -29,21 +29,25 @@ def test_build_thinking_extra_body_reasoning_effort_mode() -> None:
     ) == {"reasoning_effort": "high"}
 
 
-def test_build_thinking_extra_body_enable_thinking_mode() -> None:
-    """GLM：固定 thinking_budget。"""
+def test_build_thinking_extra_body_thinking_mode() -> None:
+    """GLM / 火山 Coding Plan：thinking 对象 + 固定 budget_tokens。"""
     assert egent.model_settings.build_thinking_extra_body(
-        "enable_thinking",
+        "thinking",
         "high",
     ) == {
-        "enable_thinking": True,
-        "thinking_budget": 4096,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 4096,
+        },
     }
     assert egent.model_settings.build_thinking_extra_body(
-        "enable_thinking",
+        "thinking",
         "low",
     ) == {
-        "enable_thinking": True,
-        "thinking_budget": 4096,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 4096,
+        },
     }
 
 
@@ -70,5 +74,5 @@ apikey = "test-key"
     leader = egent.model_settings.ModelSettings.load("leader")
     coder = egent.model_settings.ModelSettings.load("coder")
 
-    assert leader.thinking_mode == "enable_thinking"
+    assert leader.thinking_mode == "thinking"
     assert coder.thinking_mode == "reasoning_effort"
