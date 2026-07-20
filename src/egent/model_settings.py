@@ -24,7 +24,7 @@ model = "MODEL_NAME"
 apikey = "OPENAI_KEY"
 """
 
-# reasoning_effort: DeepSeek 等；thinking: 火山 Coding Plan / Z.AI GLM 的 thinking 对象
+# reasoning_effort: DeepSeek 等；thinking: 火山 Coding Plan / Z.AI 的 thinking 对象
 ThinkingMode = Literal["none", "reasoning_effort", "thinking"]
 
 _THINKING_TOKEN_BUDGET = 8192
@@ -64,23 +64,24 @@ class ModelSettings:
             profiles = tomllib.loads(path.read_text(encoding="utf-8"))
             section = profiles[profile_name]
             model_name = section["model"]
+            base_url = section.get("url") or "https://api.openai.com/v1"
             return ModelSettings(
                 api_key=section.get("apikey") or os.getenv("OPENAI_API_KEY"),
-                base_url=section.get("url") or "https://api.openai.com/v1",
+                base_url=base_url,
                 model_name=model_name,
                 profile_name=profile_name,
-                thinking_mode=infer_thinking_mode(model_name),
+                thinking_mode=infer_thinking_mode(model_name, base_url),
             )
         except (KeyError, TypeError, tomllib.TOMLDecodeError) as error:
             raise ValueError(f"配置无效: profile={profile_name!r}") from error
 
 
-def infer_thinking_mode(model_name: str) -> ThinkingMode:
-    """按模型名推断 thinking 请求格式：GLM → thinking 对象，DeepSeek → reasoning_effort。"""
-    model_key = model_name.casefold()
-    if "glm" in model_key:
+def infer_thinking_mode(model_name: str, base_url: str) -> ThinkingMode:
+    """按端点与模型名推断：火山/Z.AI → thinking，DeepSeek → reasoning_effort。"""
+    url_key = base_url.casefold()
+    if "volces.com" in url_key or "z.ai" in url_key:
         return "thinking"
-    if "deepseek" in model_key:
+    if "deepseek" in model_name.casefold():
         return "reasoning_effort"
     return "none"
 

@@ -109,14 +109,14 @@ python examples/example_agent.py
 - `url` — API 端点
 - `model` — 模型名称
 - `apikey` — API 密钥
-thinking 格式按 `model` 名自动推断（无需配置）：
-- 名称含 `glm` → `thinking: {type: enabled, budget_tokens: 8192}`（火山 Coding Plan / Z.AI）
-- 名称含 `deepseek` → `reasoning_effort`
+thinking 格式按 `url` + `model` 自动推断（无需配置）：
+- `url` 含 `volces.com` / `z.ai` → `thinking: {type: enabled, budget_tokens: 8192}`（火山 Coding Plan / Z.AI）
+- 其他端点且名称含 `deepseek` → `reasoning_effort`
 - 其他 → 不发送 thinking 参数
 
 开启思考时会设置 `max_tokens = budget_tokens + 8192`，避免思考占满默认输出额度导致空正文。
 
-`send(reasoning_effort=...)` 可选 `low` / `medium` / `high`（DeepSeek 透传；GLM 仅用于开关思考，预算固定）。
+`send(reasoning_effort=...)` 可选 `low` / `medium` / `high`（DeepSeek 透传；火山 / Z.AI 仅用于开关思考，预算固定）。
 
 ## 项目结构
 
