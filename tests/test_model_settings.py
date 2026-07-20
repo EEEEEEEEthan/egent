@@ -37,7 +37,7 @@ def test_build_thinking_extra_body_thinking_mode() -> None:
     ) == {
         "thinking": {
             "type": "enabled",
-            "budget_tokens": 4096,
+            "budget_tokens": 8192,
         },
     }
     assert egent.model_settings.build_thinking_extra_body(
@@ -46,7 +46,7 @@ def test_build_thinking_extra_body_thinking_mode() -> None:
     ) == {
         "thinking": {
             "type": "enabled",
-            "budget_tokens": 4096,
+            "budget_tokens": 8192,
         },
     }
 

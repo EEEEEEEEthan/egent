@@ -27,7 +27,7 @@ apikey = "OPENAI_KEY"
 # reasoning_effort: DeepSeek 等；thinking: 火山 Coding Plan / Z.AI GLM 的 thinking 对象
 ThinkingMode = Literal["none", "reasoning_effort", "thinking"]
 
-_THINKING_TOKEN_BUDGET = 4096
+_THINKING_TOKEN_BUDGET = 8192
 
 
 class ConfigTemplateCreatedError(FileNotFoundError):
