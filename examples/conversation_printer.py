@@ -72,6 +72,8 @@ class ConversationPrinter:
             self.__print_reasoning(event.text, end="")
             return
         if isinstance(event, egent.agent.TextDelta):
+            if not event.text:
+                return
             self.__end_reasoning_block()
             self.__print(event.text, end="")
             self._has_text = True

@@ -532,6 +532,8 @@ async def test_fetch_chat_completion_emits_reasoning_delta(monkeypatch) -> None:
                         ],
                     ),
                 ),
+                # 模拟网关在 reasoning 阶段夹带的空 content.delta，不应发出 TextDelta
+                SimpleNamespace(type="content.delta", delta=""),
                 SimpleNamespace(type="content.delta", delta="你好"),
             ]
             self._index = 0

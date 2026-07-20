@@ -556,8 +556,10 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                 extra_body=extra_body,
             ) as stream:
                 async for event in stream:
+                    # 部分网关在 reasoning 阶段会夹带空 content.delta，过滤以免打断思考块。
                     if event.type == "content.delta":
-                        self.__emit_event(TextDelta(event.delta))
+                        if event.delta:
+                            self.__emit_event(TextDelta(event.delta))
                     elif event.type == "chunk":
                         for choice in event.chunk.choices:
                             reasoning_text = getattr(choice.delta, "reasoning_content", None)
