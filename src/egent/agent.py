@@ -575,15 +575,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                                 self.__emit_event(ReasoningDelta(reasoning_text))
                 return await stream.get_final_completion()
         except LengthFinishReasonError as error:
-            completion = error.completion
-            message = completion.choices[0].message
-            if (message.content or "").strip() or message.tool_calls:
-                _logger.warning("输出因长度截断，使用部分结果继续")
-                return completion
-            raise RuntimeError(
-                "模型输出达到长度上限且无可用正文/工具调用"
-                "（常见原因：思考占满输出额度）。",
-            ) from error
+            _logger.warning("输出因长度截断，将截断结果作为本轮完整回复")
+            return error.completion
         except pydantic.ValidationError as error:
             _logger.error("流式工具参数解析失败，回退为非流式请求: %s", error)
             response = await self.__client.chat.completions.create(
