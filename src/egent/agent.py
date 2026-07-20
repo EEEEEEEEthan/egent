@@ -20,7 +20,15 @@ from typing import Any, Literal
 
 import httpx
 import pydantic
-from openai import NOT_GIVEN, APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, RateLimitError
+from openai import (
+    NOT_GIVEN,
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AsyncOpenAI,
+    LengthFinishReasonError,
+    RateLimitError,
+)
 
 import egent._line_position
 import egent.builtin_tools.env_tools
@@ -566,6 +574,11 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                             if reasoning_text:
                                 self.__emit_event(ReasoningDelta(reasoning_text))
                 return await stream.get_final_completion()
+        except LengthFinishReasonError as error:
+            raise RuntimeError(
+                "模型输出达到长度上限（常见原因：思考过长占满输出额度）。"
+                "可降低 send(reasoning_effort=...)（low/medium/high）。",
+            ) from error
         except pydantic.ValidationError as error:
             _logger.error("流式工具参数解析失败，回退为非流式请求: %s", error)
             response = await self.__client.chat.completions.create(

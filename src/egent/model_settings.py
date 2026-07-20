@@ -17,29 +17,17 @@ DEFAULT_CONFIG_TEMPLATE = """\
 url = "OPENAI_URL"
 model = "MODEL_NAME"
 apikey = "OPENAI_KEY"
-thinking = "reasoning_effort"  # none | reasoning_effort | enable_thinking | anthropic_thinking
 
 [gpt5]
 url = "OPENAI_URL"
 model = "MODEL_NAME"
 apikey = "OPENAI_KEY"
-thinking = "reasoning_effort"
 """
 
-ThinkingMode = Literal["none", "reasoning_effort", "enable_thinking", "anthropic_thinking"]
+ThinkingMode = Literal["none", "reasoning_effort", "enable_thinking"]
 
-_THINKING_MODES: frozenset[str] = frozenset({
-    "none",
-    "reasoning_effort",
-    "enable_thinking",
-    "anthropic_thinking",
-})
-
-_REASONING_EFFORT_TOKEN_BUDGETS: dict[str, int] = {
-    "low": 1024,
-    "medium": 4096,
-    "high": 16000,
-}
+# GLM enable_thinking / 同类接口的固定思考 token 上限
+_THINKING_TOKEN_BUDGET = 4096
 
 
 class ConfigTemplateCreatedError(FileNotFoundError):
@@ -73,44 +61,40 @@ class ModelSettings:
         try:
             profiles = tomllib.loads(path.read_text(encoding="utf-8"))
             section = profiles[profile_name]
-            thinking_mode = section.get("thinking", "none")
-            if thinking_mode not in _THINKING_MODES:
-                raise ValueError(
-                    f"thinking 无效: {thinking_mode!r}，"
-                    f"可选 {_THINKING_MODES}",
-                )
+            model_name = section["model"]
             return ModelSettings(
                 api_key=section.get("apikey") or os.getenv("OPENAI_API_KEY"),
                 base_url=section.get("url") or "https://api.openai.com/v1",
-                model_name=section["model"],
+                model_name=model_name,
                 profile_name=profile_name,
-                thinking_mode=thinking_mode,
+                thinking_mode=infer_thinking_mode(model_name),
             )
         except (KeyError, TypeError, tomllib.TOMLDecodeError) as error:
             raise ValueError(f"配置无效: profile={profile_name!r}") from error
+
+
+def infer_thinking_mode(model_name: str) -> ThinkingMode:
+    """按模型名推断 thinking 请求格式：GLM → enable_thinking，DeepSeek → reasoning_effort。"""
+    model_key = model_name.casefold()
+    if "glm" in model_key:
+        return "enable_thinking"
+    if "deepseek" in model_key:
+        return "reasoning_effort"
+    return "none"
 
 
 def build_thinking_extra_body(
     thinking_mode: ThinkingMode,
     reasoning_effort: str | None,
 ) -> dict[str, Any] | None:
-    """按 profile 的 thinking 模式，将 send() 的 reasoning_effort 映射为 extra_body。"""
+    """按 thinking 模式，将 send() 的 reasoning_effort 映射为 extra_body。"""
     if thinking_mode == "none" or reasoning_effort is None:
         return None
     if thinking_mode == "reasoning_effort":
         return {"reasoning_effort": reasoning_effort}
     if thinking_mode == "enable_thinking":
-        extra_body: dict[str, Any] = {"enable_thinking": True}
-        token_budget = _REASONING_EFFORT_TOKEN_BUDGETS.get(reasoning_effort)
-        if token_budget is not None:
-            extra_body["thinking_budget"] = token_budget
-        return extra_body
-    if thinking_mode == "anthropic_thinking":
-        token_budget = _REASONING_EFFORT_TOKEN_BUDGETS.get(reasoning_effort, 4096)
         return {
-            "thinking": {
-                "type": "enabled",
-                "budget_tokens": token_budget,
-            },
+            "enable_thinking": True,
+            "thinking_budget": _THINKING_TOKEN_BUDGET,
         }
     raise ValueError(f"未知 thinking 模式: {thinking_mode!r}")
