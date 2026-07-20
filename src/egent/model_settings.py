@@ -28,6 +28,8 @@ apikey = "OPENAI_KEY"
 ThinkingMode = Literal["none", "reasoning_effort", "thinking"]
 
 _THINKING_TOKEN_BUDGET = 8192
+# 思考与正文共用输出额度，须为正文预留空间：max_tokens = budget + response
+_RESPONSE_TOKEN_BUDGET = 8192
 
 
 class ConfigTemplateCreatedError(FileNotFoundError):
@@ -81,6 +83,16 @@ def infer_thinking_mode(model_name: str) -> ThinkingMode:
     if "deepseek" in model_key:
         return "reasoning_effort"
     return "none"
+
+
+def resolve_completion_max_tokens(
+    thinking_mode: ThinkingMode,
+    reasoning_effort: str | None,
+) -> int | None:
+    """开启思考时返回 max_tokens（思考预算 + 正文预留）；否则不限制。"""
+    if thinking_mode == "none" or reasoning_effort is None:
+        return None
+    return _THINKING_TOKEN_BUDGET + _RESPONSE_TOKEN_BUDGET
 
 
 def build_thinking_extra_body(

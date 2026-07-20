@@ -555,11 +555,17 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             self.__thinking_mode,
             reasoning_effort,
         )
+        max_tokens = egent.model_settings.resolve_completion_max_tokens(
+            self.__thinking_mode,
+            reasoning_effort,
+        )
+        request_max_tokens = max_tokens if max_tokens is not None else NOT_GIVEN
         try:
             async with self.__client.chat.completions.stream(
                 model=self.model,
                 messages=self.__messages,
                 tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
+                max_tokens=request_max_tokens,
                 stream_options={"include_usage": True},
                 extra_body=extra_body,
             ) as stream:
@@ -575,14 +581,22 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                                 self.__emit_event(ReasoningDelta(reasoning_text))
                 return await stream.get_final_completion()
         except LengthFinishReasonError as error:
-            _logger.warning("输出因长度截断，将截断结果作为本轮完整回复")
-            return error.completion
+            completion = error.completion
+            message = completion.choices[0].message
+            if (message.content or "").strip() or message.tool_calls:
+                _logger.warning("输出因长度截断，使用部分结果作为本轮回复")
+                return completion
+            raise RuntimeError(
+                "思考占满输出额度，正文为空。"
+                "请确认网关尊重 budget_tokens，或降低思考预算。",
+            ) from error
         except pydantic.ValidationError as error:
             _logger.error("流式工具参数解析失败，回退为非流式请求: %s", error)
             response = await self.__client.chat.completions.create(
                 model=self.model,
                 messages=self.__messages,
                 tools=self.__api_tools if self.__api_tools else NOT_GIVEN,
+                max_tokens=request_max_tokens,
                 extra_body=extra_body,
             )
             reply_text = (response.choices[0].message.content or "").strip()

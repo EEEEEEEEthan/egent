@@ -51,6 +51,14 @@ def test_build_thinking_extra_body_thinking_mode() -> None:
     }
 
 
+def test_resolve_completion_max_tokens_reserves_response_room() -> None:
+    """开启思考时 max_tokens 须大于 thinking 预算，给正文留空间。"""
+    assert egent.model_settings.resolve_completion_max_tokens("none", "high") is None
+    assert egent.model_settings.resolve_completion_max_tokens("thinking", None) is None
+    assert egent.model_settings.resolve_completion_max_tokens("thinking", "high") == 16384
+    assert egent.model_settings.resolve_completion_max_tokens("reasoning_effort", "high") == 16384
+
+
 def test_model_settings_load_infers_thinking_mode(tmp_path, monkeypatch) -> None:
     """load 应根据 model 推断 thinking_mode。"""
     config_path = tmp_path / ".egent" / ".model.toml"

@@ -114,6 +114,8 @@ thinking 格式按 `model` 名自动推断（无需配置）：
 - 名称含 `deepseek` → `reasoning_effort`
 - 其他 → 不发送 thinking 参数
 
+开启思考时会设置 `max_tokens = budget_tokens + 8192`，避免思考占满默认输出额度导致空正文。
+
 `send(reasoning_effort=...)` 可选 `low` / `medium` / `high`（DeepSeek 透传；GLM 仅用于开关思考，预算固定）。
 
 ## 项目结构
