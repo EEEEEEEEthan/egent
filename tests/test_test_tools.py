@@ -24,7 +24,15 @@ def test_execute_pytest_runs_full_suite(monkeypatch) -> None:
     passed, output = egent.builtin_tools.test_tools.execute_pytest(None)
 
     assert passed is True
-    assert captured["command"] == [sys.executable, "-m", "pytest"]
+    assert captured["command"] == [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-n",
+        "auto",
+        "--dist",
+        "load",
+    ]
     assert captured["kwargs"]["cwd"] == Path.cwd()
     assert "exit_code: 0" in output
 
@@ -48,6 +56,10 @@ def test_execute_pytest_passes_targets(monkeypatch) -> None:
         sys.executable,
         "-m",
         "pytest",
+        "-n",
+        "auto",
+        "--dist",
+        "load",
         "tests/test_foo.py::test_bar",
     ]
     assert "fail" in output

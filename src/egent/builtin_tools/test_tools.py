@@ -13,12 +13,21 @@ import egent.builtin_tools.command_utils
 
 _logger = logging.getLogger(__name__)
 
+# 按 test 函数调度到各 worker（非按模块/文件），缩短墙钟时间
+_PARALLEL_ARGUMENTS = ("-n", "auto", "--dist", "load")
+
 __all__ = ["execute_pytest", "run_regression_test"]
 
 
 def execute_pytest(targets: list[str] | None = None) -> tuple[bool, str]:
-    """跑 pytest，返回 (passed, output)。"""
-    command = [sys.executable, "-m", "pytest", *([] if targets is None else targets)]
+    """跑 pytest，返回 (passed, output)。默认按 test 函数并发。"""
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        *_PARALLEL_ARGUMENTS,
+        *([] if targets is None else targets),
+    ]
     try:
         result = subprocess.run(
             command,
