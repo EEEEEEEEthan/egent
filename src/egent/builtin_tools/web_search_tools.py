@@ -1,4 +1,4 @@
-"""Web 搜索/抓取内置工具（使用 duckduckgo-search + httpx，无需 API key）。"""
+"""Web 搜索/抓取内置工具（使用 ddgs + httpx，无需 API key）。"""
 
 from __future__ import annotations
 
@@ -7,25 +7,26 @@ import traceback
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
+
 _logger = logging.getLogger(__name__)
 
 
 @dataclass
 class WebToolSet:
-    """基于 DuckDuckGo 的零配置 Web 搜索 + 页面抓取工具集。"""
+    """基于 ddgs 元搜索的零配置 Web 搜索 + 页面抓取工具集。"""
 
     def web_search(self, query: str, max_results: int = 10) -> str:
-        """用 DuckDuckGo 搜索，返回格式化摘要。
+        """用多引擎元搜索，返回格式化摘要。
 
         @param query 搜索关键词
         @param max_results 返回结果数上限，缺省 10
         """
         # pylint: disable=import-outside-toplevel,import-error
         try:
-            from duckduckgo_search import DDGS  # type: ignore[import-untyped]
-            results = list(DDGS().text(query, max_results=max_results))
+            import ddgs
+            results = list(ddgs.DDGS().text(query, max_results=max_results))
         except ImportError:
-            return "搜索失败：需要安装 duckduckgo-search"
+            return "搜索失败：需要安装 ddgs"
         except Exception as exc:  # pylint: disable=broad-exception-caught
             tb = traceback.format_exc().rstrip()
             _logger.error("搜索失败:\n%s", tb)

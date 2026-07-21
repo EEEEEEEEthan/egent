@@ -1,10 +1,10 @@
 [project]
 name = "egent"
-version = "0.1.49"
+version = "0.1.50"
 description = "Chat Completions 多轮对话与工具调用封装"
 requires-python = ">=3.13"
 dependencies = [
-    "duckduckgo-search>=6.0",
+    "ddgs>=9.0",
     "httpx>=0.27",
     "openai>=1.68.0",
     "prompt-toolkit>=3.0",
