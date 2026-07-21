@@ -128,6 +128,8 @@ def test_agent_composes_system_prompt_with_skill_catalog(monkeypatch, tmp_path) 
     assert messages[0]["role"] == "system"
     assert messages[0]["content"].startswith("你是代码助手。\n\n可用技能")
     assert "- demo: 示例技能" in messages[0]["content"]
+    assert "当前时间: " in messages[0]["content"]
+    assert "`__bt_get_current_time`" in messages[0]["content"]
 
 
 def test_agent_includes_builtin_file_tools(monkeypatch) -> None:

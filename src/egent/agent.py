@@ -246,7 +246,8 @@ class Agent:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             f"操作系统信息: {platform.system()} {platform.release()}"
         )
         system_sections.append(
-            "可用 `__bt_get_current_time` 获取当前时间，不要自己猜时间。"
+            f"当前时间: {self.__env_tool_set.get_current_time()}。"
+            "之后可用 `__bt_get_current_time` 获取最新时间，不要自己猜时间。"
         )
         if system_sections:
             self.__add_message("system", "\n\n".join(system_sections))
